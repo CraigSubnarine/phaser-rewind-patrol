@@ -22,6 +22,9 @@ class Play extends Phaser.Scene {
       for (const era of ERAS) for (const k of [`ride-${era.id}-f`, `ride-${era.id}-b`, `rideE-${era.id}-f`, `rideE-${era.id}-b`]) {
         this.anims.create({ key: k, frames: [{ key: `${k}0` }, { key: `${k}1` }], frameRate: 6, repeat: -1 });
       }
+      for (const era of ERAS) for (const { key } of [era.mid, era.boss]) {
+        this.anims.create({ key: `${key}-idle`, frames: [{ key: `${key}0` }, { key: `${key}1` }], frameRate: 3, repeat: -1 });
+      }
     }
     this.diff = DIFFICULTY[settings.difficulty];
     this.t = 0; // game time that stops while paused (update() isn't called then)
@@ -87,6 +90,7 @@ class Play extends Phaser.Scene {
       nextAxe: 0, nextBoomerang: 0, orbitAngle: 0, chargeLockUntil: 0, endless: false,
       bonus: null, nextRider: 0, hudSecs: 0, // bonus levels
       et: 0, // enemy clock: like t, but it stops while the Siren has enemies frozen
+      hazards: [], // bosses' lane attacks: { x0, x1, until, bar }
     });
     this.refreshStats();
     this.hp = this.P.maxHp;
@@ -156,7 +160,7 @@ class Play extends Phaser.Scene {
       this.cameras.main.flash(300, 255, 240, 200);
       boom(600, 0.14);
       for (const e of this.enemies.getChildren().slice()) if (e.y > -20) this.killEnemy(e, true);
-      this.enemyShots.clear(true, true);
+      this.clearShots();
       if (this.boss?.ready) this.damage(this.boss, 30 * this.dmgNow(), true);
     } else if (effect === 'skip') { // VCR Remote: this wave is over, on to the next
       this.banner('FAST FORWARD >>', 1200, 24);
@@ -164,13 +168,13 @@ class Play extends Phaser.Scene {
       this.streamTimers.forEach(t => t.remove());
       this.spawnsLeft = 0;
       for (const e of this.enemies.getChildren().slice()) { this.sparks.explode(8, e.x, e.y); e.destroy(); }
-      this.enemyShots.clear(true, true);
+      this.clearShots();
       this.waveCleared();
     } else if (effect === 'freeze') { // Siren: enemies stop, their shots vanish
       this.banner('SIREN!', 1000, 26);
       jingle([880, 660, 880, 660]);
       this.frozenUntil = this.t + 5000;
-      this.enemyShots.clear(true, true);
+      this.clearShots();
     } else if (effect === 'invuln') { // Testudo
       this.banner('TESTUDO!', 1000, 26);
       this.testudoUntil = this.t + P.testudoMs;
@@ -210,7 +214,7 @@ class Play extends Phaser.Scene {
       if (this.boss?.ready) this.time.delayedCall(900, () => this.boss && this.damage(this.boss, dmg, true));
     } else if (effect === 'blossom') { // razor petals cut every enemy on screen and wipe out their shots
       this.banner('PETAL STORM!', 1200, 24);
-      this.enemyShots.clear(true, true);
+      this.clearShots();
       for (let i = 0; i < 40; i++) {
         const petal = this.add.image(Phaser.Math.Between(0, W), -20, 'spark').setTint(0xffb7d5).setScale(3).setDepth(5);
         this.tweens.add({ targets: petal, y: H + 20, x: petal.x + Phaser.Math.Between(-140, 140), angle: 360, duration: Phaser.Math.Between(700, 1300), onComplete: () => petal.destroy() });
@@ -359,7 +363,7 @@ class Play extends Phaser.Scene {
     this.sideMode = mode;
     this.cameras.main.fadeIn(350, 0, 0, 0);
     this.bullets.clear(true, true); // shots from the last view would fly through the new scenery
-    this.enemyShots.clear(true, true);
+    this.clearShots();
     this.road.setVisible(!side);
     this.hills.setVisible(side).setTexture(`hills-${era.id}`);
     this.ground.setVisible(side).setTexture(`ground-${era.id}`);
@@ -410,7 +414,7 @@ class Play extends Phaser.Scene {
       if (this.hp <= 0) return;
       for (const p of this.pickups.getChildren().slice()) this.collect(p);
       this.vacuum = false;
-      this.enemyShots.clear(true, true);
+      this.clearShots();
       const mode = this.rollBonus();
       if (mode) this.startBonus(mode);
       else this.afterLevel();
@@ -453,7 +457,7 @@ class Play extends Phaser.Scene {
     this.bonus = null;
     for (const e of this.enemies.getChildren().slice()) { this.sparks.explode(8, e.x, e.y); e.destroy(); } // the rest peel away
     for (const p of this.pickups.getChildren().slice()) this.collect(p); // coins still on the road are yours
-    this.enemyShots.clear(true, true);
+    this.clearShots();
     this.obstacles.clear(true, true);
     const pay = b.caught * (2 + this.era);
     this.addCoins(pay);
@@ -514,20 +518,42 @@ class Play extends Phaser.Scene {
     this.tweens.add({ targets: e, enter: 1, duration: 1400, ease: 'Sine.easeOut' });
   }
 
+  // A boss flies in, says its line, then fights in phases (see ERAS: `phases`, `taunts`, `move`).
   spawnBoss(main) {
     const cfg = main ? this.E.boss : this.E.mid;
     this.banner(cfg.name, 2200, 26);
-    const b = this.boss = this.physics.add.image(W / 2, -110, cfg.key).setDepth(1);
-    Object.assign(b, { cfg, main, ready: false });
+    const b = this.boss = this.physics.add.sprite(W / 2, -150, `${cfg.key}0`).setDepth(1).play(`${cfg.key}-idle`);
+    b.body.setSize(b.width * 0.8, b.height * 0.8);
+    Object.assign(b, { cfg, main, ready: false, phase: 0, step: 0, stream: null, charging: false, nextBlink: 0, sweepDir: 1 });
     b.maxHp = b.hp = this.bossHp(main);
-    this.tweens.add({ targets: b, y: 180, duration: 2200, ease: 'Sine.easeOut', onComplete: () => { b.ready = true; b.readyAt = this.et; } });
+    this.tweens.add({ targets: b, y: 180, duration: 2200, ease: 'Sine.easeOut', onComplete: () => {
+      Object.assign(b, { ready: true, readyAt: this.et, nextAttack: this.t + 900, nextBlink: this.t + 3500 });
+      this.say(b, cfg.taunts[0]);
+    } });
     this.bossColliders = [
       this.physics.add.overlap(b, this.bullets, (boss, bullet) => this.bulletHit(bullet, boss)),
       this.physics.add.overlap(this.player, b, () => this.hitPlayer()),
     ];
     this.bossBar = this.add.graphics().setDepth(10);
-    this.nextFan = this.t + 3000;
-    this.nextAim = this.t + 4200;
+  }
+
+  // A boss's line, under it for a couple of seconds.
+  say(b, text) {
+    if (!text) return;
+    this.lastTaunt = text;
+    const t = this.add.text(W / 2, 180 + b.displayHeight / 2 + 22, `"${text}"`, {
+      fontFamily: FONT, fontSize: '12px', color: '#ffffff', align: 'center', stroke: '#000000', strokeThickness: 4, lineSpacing: 6, wordWrap: { width: W - 80 },
+    }).setOrigin(0.5, 0).setDepth(10);
+    this.tweens.add({ targets: t, alpha: 0, delay: 2400, duration: 400, onComplete: () => t.destroy() });
+  }
+
+  // The boss's hurt pose for a moment, then back to its idle animation.
+  hurt(b, ms) {
+    if (!b.active) return;
+    b.anims.stop();
+    b.setTexture(`${b.cfg.key}Hurt`);
+    b.hurtTimer?.remove();
+    b.hurtTimer = this.time.delayedCall(ms, () => b.active && b === this.boss && b.play(`${b.cfg.key}-idle`));
   }
 
   // ----- Vega's shooting -----
@@ -630,6 +656,7 @@ class Play extends Phaser.Scene {
     }
     target.hp -= d;
     if (isBoss && !quiet) this.addCharge(0.1); // hits on a boss charge the active item too
+    if (isBoss && !quiet && target.hp > 0 && !(target.hurtAt > this.t)) { target.hurtAt = this.t + 1000; this.hurt(target, 180); }
     if (target.hp <= 0) return isBoss ? this.bossDown() : this.killEnemy(target, true);
     if (quiet) return;
     target.setTintFill(0xffffff);
@@ -658,7 +685,14 @@ class Play extends Phaser.Scene {
         this.damage(e, dmg, false);
       }
     }
-    if (this.boss?.ready && Phaser.Math.Distance.Between(x, y, this.boss.x, this.boss.y) < r + 50) this.damage(this.boss, dmg, true, cannon);
+    if (this.boss?.ready && Phaser.Math.Distance.Between(x, y, this.boss.x, this.boss.y) < r + this.boss.displayWidth * 0.35) this.damage(this.boss, dmg, true, cannon);
+  }
+
+  // Enemy shots and boss lane attacks vanish (Siren, Petal Storm, a new view, a boss going down...).
+  clearShots() {
+    this.enemyShots.clear(true, true);
+    for (const hz of this.hazards) hz.bar.destroy();
+    this.hazards = [];
   }
 
   // ----- Enemies -----
@@ -696,7 +730,12 @@ class Play extends Phaser.Scene {
     this.bossColliders.forEach(c => c.destroy());
     this.bossBar.destroy();
     b.disableBody(false, false);
-    this.enemyShots.clear(true, true);
+    this.tweens.killTweensOf(b);
+    b.setAlpha(1).anims.stop();
+    b.hurtTimer?.remove();
+    b.setTexture(`${b.cfg.key}Hurt`);
+    this.clearShots();
+    for (const e of this.enemies.getChildren().slice()) { this.sparks.explode(8, e.x, e.y); e.destroy(); } // its soldiers flee
     this.addScore((b.main ? 5000 : 2500) * (this.era + 1));
     this.cameras.main.shake(700, 0.015);
     for (let i = 0; i < 7; i++) {
@@ -911,8 +950,12 @@ class Play extends Phaser.Scene {
     }
     if (!frozen) {
       this.updateEnemies(dt);
-      this.updateBoss();
+      this.updateBoss(dt);
     } else if (this.boss) this.drawBossBar();
+    for (const hz of this.hazards.slice()) { // a boss's lane attack: anyone standing in the column gets hit
+      if (this.t >= hz.until) { hz.bar.destroy(); this.hazards.splice(this.hazards.indexOf(hz), 1); }
+      else if (this.player.active && this.player.x > hz.x0 && this.player.x < hz.x1) this.hitPlayer();
+    }
     this.hpBars.clear();
     for (const e of this.enemies.getChildren()) { // soldiers that take more than one hit show how worn down they are
       if (e.hp >= e.maxHp || e.maxHp <= P.dmg) continue;
@@ -951,7 +994,7 @@ class Play extends Phaser.Scene {
       for (const e of this.enemies.getChildren().slice()) {
         if (near(e, 32) && !(e.starCd > this.t)) { e.starCd = this.t + 400; this.damage(e, 1.5 * this.dmgNow(), false); }
       }
-      if (this.boss?.ready && near(this.boss, 70) && !(this.boss.starCd > this.t)) { this.boss.starCd = this.t + 400; this.damage(this.boss, 1.5 * this.dmgNow(), true); }
+      if (this.boss?.ready && near(this.boss, this.boss.displayWidth * 0.45) && !(this.boss.starCd > this.t)) { this.boss.starCd = this.t + 400; this.damage(this.boss, 1.5 * this.dmgNow(), true); }
       for (const s of this.enemyShots.getChildren().slice()) if (near(s, 22)) s.destroy();
     });
 
@@ -1069,29 +1112,155 @@ class Play extends Phaser.Scene {
     this.bossBar.clear().fillStyle(0x000000, 0.6).fillRect(60, 64, bw, 12).fillStyle(0xff4fd8).fillRect(60, 64, bw * Math.max(0, b.hp) / b.maxHp, 12);
   }
 
-  updateBoss() {
+  updateBoss(dt) {
     const b = this.boss;
     if (!b) return;
     this.drawBossBar();
     if (!b.ready) return;
+    const cfg = b.cfg, range = W / 2 - b.displayWidth / 2 - 10, k = this.et - b.readyAt;
 
-    b.x = W / 2 + Math.sin((this.et - b.readyAt) / 1300) * (W / 2 - 90);
-    const rage = b.hp < b.maxHp / 2 ? 0.65 : 1; // attacks come faster below half health
-    const speed = this.diff.shotSpeed / 250, shot = b.cfg.shot;
-    if (this.t > this.nextFan) {
-      this.nextFan = this.t + 1800 * rage / this.diff.fire;
-      const n = b.main && rage < 1 ? 7 : 5;
-      for (let i = 0; i < n; i++) this.shoot(b.x, b.y + 40, shot, 220 * speed, -0.7 + 1.4 * i / (n - 1));
-      beep(180, 120, 0.04);
-    }
-    if (this.t > this.nextAim) {
-      this.nextAim = this.t + 2600 * rage / this.diff.fire;
-      for (let i = 0; i < 3; i++) {
-        this.time.delayedCall(i * 150, () => {
-          if (this.boss && this.player.active) this.shoot(b.x, b.y + 40, shot, 320 * speed, this.angleToPlayer(b.x, b.y));
-        });
+    // Moving: sway side to side, hover in a slow figure of eight, or vanish and reappear somewhere else.
+    if (!b.charging) {
+      if (cfg.move === 'teleport') {
+        if (this.t > b.nextBlink) {
+          b.nextBlink = this.t + 3800;
+          this.tweens.add({ targets: b, alpha: 0, duration: 220, yoyo: true, onYoyo: () => { b.x = W / 2 + Phaser.Math.FloatBetween(-1, 1) * range; } });
+        }
+      } else {
+        const hover = cfg.move === 'hover';
+        const x = W / 2 + Math.sin(k / (hover ? 2100 : 1300)) * range * (hover ? 0.7 : 1), y = hover ? 180 + Math.sin(k / 800) * 18 : 180;
+        const ease = Math.min(1, dt * 4); // eased, so it glides back into its path after a charge
+        b.x += (x - b.x) * ease;
+        b.y += (y - b.y) * ease;
       }
     }
+
+    // A new phase at each threshold: a line, the hurt pose, a breather, then the next set of attacks.
+    const n = cfg.phases.length, phase = Math.min(n - 1, Math.floor((1 - b.hp / b.maxHp) * n));
+    if (phase > b.phase) {
+      Object.assign(b, { phase, step: 0, stream: null, nextAttack: this.t + 1400 });
+      this.hurt(b, 700);
+      this.say(b, cfg.taunts[phase]);
+      this.clearShots();
+      jingle([392, 330, 262]);
+    }
+
+    // Shots fired over time (spiral, sweep, rain, aimed bursts) go out one tick at a time, so the Siren pauses them.
+    const st = b.stream;
+    if (st && this.t >= st.next) {
+      st.fire(st.i++);
+      st.next += st.every;
+      if (st.i >= st.count) b.stream = null;
+    }
+    if (this.t > b.nextAttack && !b.stream && !b.charging) {
+      const list = cfg.phases[b.phase], [name, arg] = list[b.step++ % list.length].split(':');
+      const ms = this.bossAttack(b, name, arg);
+      b.nextAttack = this.t + ms + (1000 - 200 * b.phase) / this.diff.fire;
+    }
+  }
+
+  // One boss attack, by name (from the boss's `phases`; `arg` is the shot sprite, or for `summon` the soldier type).
+  // Returns about how long it lasts in ms.
+  bossAttack(b, name, arg) {
+    const shot = arg || b.cfg.shot, sp = this.diff.shotSpeed / 250, x = () => b.x, y = () => b.y + b.displayHeight * 0.3;
+    const ticks = (count, every, fire) => { b.stream = { count, every, i: 0, next: this.t, fire }; return count * every; };
+    beep(180, 120, 0.04);
+    switch (name) {
+      case 'fan': { // a spread of shots
+        const n = 5 + 2 * b.phase;
+        for (let i = 0; i < n; i++) this.shoot(x(), y(), shot, 220 * sp, -0.8 + 1.6 * i / (n - 1));
+        return 400;
+      }
+      case 'aimed': // a quick burst straight at Vega
+        return ticks(3 + b.phase, 150, () => this.player.active && this.shoot(x(), y(), shot, 320 * sp, this.angleToPlayer(x(), y())));
+      case 'ring': { // shots in every direction
+        const n = 14 + 4 * b.phase, off = Math.random();
+        for (let i = 0; i < n; i++) this.shoot(x(), b.y, shot, 200 * sp, (i + off) / n * Math.PI * 2);
+        boom(140, 0.05);
+        return 600;
+      }
+      case 'spiral': // two arms of shots turning round
+        return ticks(24, 85, i => { for (const a of [0, Math.PI]) this.shoot(x(), b.y, shot, 190 * sp, i * 0.33 + a); });
+      case 'sweep': { // a gun sweeping across the screen and back
+        const dir = b.sweepDir = -b.sweepDir;
+        return ticks(26, 60, i => this.shoot(x(), y(), shot, 300 * sp, dir * (-0.95 + 1.9 * i / 25)));
+      }
+      case 'wall': { // a row of shots coming down, with one gap to slip through
+        const gap = Phaser.Math.Between(0, 10);
+        for (let i = 0; i < 12; i++) if (i !== gap && i !== gap + 1) this.shoot(25 + i * 50, b.y + 40, shot, 170 * sp, 0);
+        return 900;
+      }
+      case 'rain': // shots falling from the top of the screen
+        return ticks(12, 110, () => this.shoot(Phaser.Math.Between(30, W - 30), -10, shot, 260 * sp, Phaser.Math.FloatBetween(-0.15, 0.15)));
+      case 'mortar': { // lobbed at where Vega is (the landing spot is marked), bursting into stones
+        const n = 2 + b.phase;
+        for (let i = 0; i < n; i++) this.time.delayedCall(i * 350, () => this.boss === b && this.lob(b, shot, sp));
+        return 1000 + n * 350;
+      }
+      case 'lanes': return this.lanes(b, 2 + b.phase);
+      case 'charge': return this.bossCharge(b);
+      case 'summon': return this.summon(arg || 'G', arg === 'H' ? 2 : 3 + b.phase);
+    }
+    return 0;
+  }
+
+  lob(b, tex, sp) {
+    const tx = Phaser.Math.Clamp(this.player.x + Phaser.Math.Between(-50, 50), 40, W - 40);
+    const ty = Phaser.Math.Clamp(this.player.y + Phaser.Math.Between(-40, 30), H * 0.5, H - 60);
+    const mark = this.add.circle(tx, ty, 34, 0xff3b3b, 0.2).setStrokeStyle(2, 0xff3b3b, 0.8);
+    const ball = this.add.image(b.x, b.y, tex).setDepth(5);
+    const scale = ball.width < 30 ? 2 : 1;
+    ball.setScale(scale);
+    this.tweens.add({ targets: ball, scale: scale * 1.7, duration: 500, yoyo: true }); // up and down: the arc
+    this.tweens.add({ targets: ball, x: tx, y: ty, angle: 360, duration: 1000, onComplete: () => {
+      ball.destroy();
+      mark.destroy();
+      if (this.boss !== b) return;
+      this.sparks.explode(16, tx, ty);
+      boom(160, 0.06);
+      for (let i = 0; i < 8; i++) this.shoot(tx, ty, 'stone', 190 * sp, i / 8 * Math.PI * 2);
+    } });
+  }
+
+  // Some of the screen's 6 columns flash red, then something slams down them (a tentacle, a beam, a tail...).
+  // At least 2 columns are always safe.
+  lanes(b, n) {
+    const w = W / 6, color = b.cfg.laneColor ?? 0xff4fd8;
+    for (const c of Phaser.Utils.Array.Shuffle([0, 1, 2, 3, 4, 5]).slice(0, Math.min(n, 4))) {
+      const x = c * w + w / 2, warn = this.add.rectangle(x, H / 2 + 60, w - 8, H, 0xff3b3b, 0.18);
+      this.time.delayedCall(800, () => {
+        warn.destroy();
+        if (this.boss !== b) return;
+        const bar = this.add.rectangle(x, H / 2 + 60, w - 16, H, color, 0.85).setDepth(0.5); // under the boss and Vega
+        this.hazards.push({ x0: x - w / 2 + 8, x1: x + w / 2 - 8, until: this.t + 450, bar });
+        this.cameras.main.shake(150, 0.006);
+        boom(200, 0.06);
+      });
+    }
+    return 1400;
+  }
+
+  // The boss shakes, then dashes down at Vega and back up (touching it hurts).
+  bossCharge(b) {
+    b.charging = true;
+    this.tweens.add({ targets: b, x: b.x + 6, duration: 50, yoyo: true, repeat: 5, onComplete: () => {
+      if (this.boss !== b) return;
+      beep(160, 200, 0.05);
+      const tx = Phaser.Math.Clamp(this.player.x, b.displayWidth / 2, W - b.displayWidth / 2), ty = Math.min(this.player.y - 40, H - 120);
+      this.tweens.add({ targets: b, x: tx, y: ty, duration: 550, ease: 'Quad.easeIn', yoyo: true, hold: 200, onComplete: () => { b.charging = false; } });
+    } });
+    return 2000;
+  }
+
+  // The boss calls in a few soldiers of its army (at most 8 on screen).
+  summon(role, n) {
+    n = Math.min(n, 8 - this.enemies.countActive());
+    for (let i = 0; i < n; i++) {
+      const x = W / 2 + (i - (n - 1) / 2) * 80;
+      const e = this.spawnEnemy(x, -40, role, { mode: 'formation', homeX: x, homeY: 340, fromX: x, fromY: -40, enter: 0 });
+      this.tweens.add({ targets: e, enter: 1, delay: i * 80, duration: 900, ease: 'Sine.easeOut' });
+    }
+    return 1000;
   }
 }
 

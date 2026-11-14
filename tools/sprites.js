@@ -62,6 +62,7 @@ function describe({ sizes, eras }) {
     return `| \`${key}.png\` | ${sizes[key][0]} x ${sizes[key][1]} | ${what} |\n`;
   };
   const table = rows => `| File | Size | What it is |\n|---|---|---|\n${rows.join('')}\n`;
+  const frame = f => (f === 'Hurt' ? 'Hurt pose (shown when hit). All three frames must be the same size.' : `Idle animation, frame ${+f + 1} of 2.`);
   let md = '# Sprite list\n\nEvery built-in sprite, at the size it appears in the game. To replace one, see `../README.md`.\n\n';
   md += '## Vega and his gear\n\n' + table([
     row('vega0', 'Vega on foot, seen from above, facing up. Walk frame: feet together.'),
@@ -77,6 +78,8 @@ function describe({ sizes, eras }) {
   md += '## Pickups and effects\n\n' + table([
     row('coin', 'Coin.'), row('donut', 'Donut (heals 1).'), row('coffee', 'Coffee (heals fully).'), row('part', 'Time-drive part.'),
     row('orb', "Bosses' energy shot."), row('boulder', 'Boulder (Siege Engine shot, Trebuchet, meteors).'),
+    row('icicle', 'Icicle (Frost Giant shot, points down).'), row('dynamite', 'Dynamite (lobbed by Wild West bosses).'),
+    row('stone', 'Stone (Stone Age shot; lobbed boss shots also burst into these).'),
     row('spark', 'Explosion spark (tinted).'), row('streak', 'Time-jump streak (tinted).'), row('road-1986', '1986 street, menu and ending. Road tile: repeats top to bottom, so the top and bottom edges must join.'),
   ]);
   for (const e of eras) {
@@ -86,8 +89,8 @@ function describe({ sizes, eras }) {
       row(e.army.C, 'Charger (runs at Vega, never shoots), front view.'),
       row(e.army.H, 'Heavy (takes 4x the hits), front view, 14 x 14 pixels drawn at 4x.'),
       row(e.shot, 'Their shot (points down).'),
-      row(e.mid, `Mid-boss (stage 5): ${e.midName}.`),
-      row(e.boss, `Boss (stage 10): ${e.bossName}.`),
+      ...['0', '1', 'Hurt'].map(f => row(`${e.mid}${f}`, `Mid-boss (wave 5): ${e.midName}. ${frame(f)}`)),
+      ...['0', '1', 'Hurt'].map(f => row(`${e.boss}${f}`, `Boss (wave 10): ${e.bossName}. ${frame(f)}`)),
       row(`road-${e.id}`, 'Road tile, seen from above. Repeats top to bottom: the top and bottom edges must join.'),
       row(`hills-${e.id}`, 'Vehicle stages: distant scenery with a see-through sky. Repeats sideways: left and right edges must join.'),
       row(`ground-${e.id}`, 'Vehicle stages: the ground the vehicles race on. Repeats sideways: left and right edges must join.'),

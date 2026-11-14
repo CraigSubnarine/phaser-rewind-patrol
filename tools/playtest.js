@@ -419,6 +419,82 @@ async function run(browser, name, options) {
     const other = await firstShop(page, 'OTHER9');
     check(`${name}: same seed gives the same timelines and shop, a different seed doesn't`,
       again.offers === offers1 && again.route === route1 && (other.route !== route1 || other.offers !== offers1), JSON.stringify({ route1, again, other }));
+    // ----- Every boss: idle animation, each phase's taunt and hurt pose, and every one of its attacks -----
+    await startRun(page, 'BOSSES');
+    await page.evaluate(() => { // let wave 1 start, then clear it away so the bosses have the screen to themselves
+      const s = scene();
+      for (let f = 0; f < 600 && !s.waveActive; f++) { s.invulnUntil = Infinity; __step(1); }
+      s.streamTimers.forEach(t => t.remove());
+      s.enemies.clear(true, true);
+      Object.assign(s, { waveActive: false, spawnsLeft: 0 });
+    });
+    const bossList = await page.evaluate(() => ERAS.flatMap((e, i) => [[i, false], [i, true]]));
+    for (const [i, main] of bossList) {
+      const r = await page.evaluate(([i, main]) => {
+        const s = scene(), hold = () => { s.nextFire = s.nextCannon = s.nextAxe = s.nextBoomerang = s.t + 1e6; s.invulnUntil = Infinity; };
+        s.E = ERAS[i];
+        hold();
+        s.spawnBoss(main);
+        const b = s.boss, cfg = b.cfg, seen = { taunts: [], phases: [], attacks: {}, hurt: true };
+        for (let f = 0; f < 200 && !b.ready; f++) { hold(); __step(1); }
+        b.nextAttack = Infinity; // only the attacks we fire below
+        seen.taunts.push(s.lastTaunt);
+        const frames = new Set();
+        for (let f = 0; f < 60; f++) { hold(); __step(1); frames.add(b.texture.key); }
+        seen.idle = frames.has(`${cfg.key}0`) && frames.has(`${cfg.key}1`);
+        for (let ph = 0; ph < cfg.phases.length; ph++) {
+          if (ph > 0) { // knock it just past the next threshold
+            b.hp = b.maxHp * (1 - ph / cfg.phases.length) - 0.01;
+            hold();
+            __step(2);
+            b.nextAttack = Infinity;
+            seen.phases.push(b.phase);
+            seen.taunts.push(s.lastTaunt);
+            seen.hurt &&= b.texture.key === `${cfg.key}Hurt`;
+          }
+          for (const spec of cfg.phases[ph]) {
+            const [name, arg] = spec.split(':');
+            s.clearShots();
+            s.enemies.clear(true, true);
+            s.bossAttack(b, name, arg);
+            const got = { shots: 0, hazards: 0, soldiers: 0, lowest: b.y };
+            for (let f = 0; f < 150; f++) {
+              hold();
+              __step(1);
+              got.shots = Math.max(got.shots, s.enemyShots.countActive());
+              got.hazards = Math.max(got.hazards, s.hazards.length);
+              got.soldiers = Math.max(got.soldiers, s.enemies.countActive());
+              got.lowest = Math.max(got.lowest, b.y);
+            }
+            seen.attacks[spec] = name === 'lanes' ? got.hazards > 0 : name === 'charge' ? got.lowest > 400
+              : name === 'summon' ? got.soldiers > 0 : got.shots > 0;
+          }
+        }
+        return { key: cfg.key, ...seen, wantTaunts: cfg.taunts, n: cfg.phases.length };
+      }, [i, main]);
+      const attacksOk = Object.values(r.attacks).every(Boolean);
+      check(`${name}: ${r.key}: idle animation, ${r.n} phases with their taunts and hurt pose, every attack works`,
+        r.idle && r.hurt && JSON.stringify(r.phases) === JSON.stringify([...Array(r.n).keys()].slice(1)) && JSON.stringify(r.taunts) === JSON.stringify(r.wantTaunts) && attacksOk,
+        attacksOk ? JSON.stringify({ phases: r.phases, idle: r.idle, hurt: r.hurt }) : JSON.stringify(r.attacks));
+      await page.evaluate(() => { // one more attack of its last phase, caught mid-flight for the screenshot
+        const s = scene(), b = s.boss, [name, arg] = b.cfg.phases[b.cfg.phases.length - 1][0].split(':');
+        s.clearShots();
+        s.bossAttack(b, name, arg);
+        for (let f = 0; f < 45; f++) { s.nextFire = s.t + 1e6; s.invulnUntil = Infinity; __step(1); }
+      });
+      await shot(`5b-boss-${r.key}`);
+      await page.evaluate(() => {
+        const s = scene(), b = s.boss;
+        s.bossColliders.forEach(c => c.destroy());
+        s.bossBar.destroy();
+        s.tweens.killTweensOf(b);
+        b.destroy();
+        s.boss = null;
+        s.clearShots();
+        s.enemies.clear(true, true);
+      });
+    }
+
     // A full route whose bonus plan has a bonus after the first mini-boss, both a chase and an escape, and a
     // mini-boss with no bonus level.
     const routeSeed = await page.evaluate(() => findSeed('ROUTE', TIMELINES, p => p[0] && p.includes('chase') && p.includes('escape') && p.includes(null)));
@@ -465,7 +541,7 @@ async function run(browser, name, options) {
         await shot(`6-stage-${stage}-card`);
       } else {
         // Look for the boss arriving: by late stages the bot's build can kill it the moment it becomes hittable.
-        const got = await page.evaluate(n => { __bot(`scene().stage === ${n} && scene().boss`, 400); return { stage: scene().stage, boss: scene().boss?.texture.key }; }, stage);
+        const got = await page.evaluate(n => { __bot(`scene().stage === ${n} && scene().boss`, 400); return { stage: scene().stage, boss: scene().boss?.cfg.key }; }, stage);
         check(`${name}: boss on wave ${stage} (${key})`, got.stage === stage && got.boss === key, JSON.stringify(got));
         await page.evaluate(() => { __step(140); scene().boss?.clearTint(); }); // let it fly in; no white hit-flash in the picture
         await shot(`5-boss-stage-${stage}`);
@@ -579,17 +655,18 @@ async function run(browser, name, options) {
   await ctx.close();
 }
 
-// Your own sprites: pretend assets/sprites/ holds two PNGs (the donut template as the coin, the King Lizard
-// template as Vega) and check they replace the built-in ones, and that Vega's hitbox and gun follow his new size.
+// Your own sprites: pretend assets/sprites/ holds two PNGs (the donut template as the coin, the King Lizard's first
+// idle frame as Vega) and check they replace the built-in ones, and that Vega's hitbox and gun follow his new size.
 async function customSprites(browser) {
   const templates = path.resolve(__dirname, '..', 'assets', 'templates');
-  if (!fs.existsSync(path.join(templates, 'trex.png'))) return check('custom sprites: templates exported', false, 'run node tools/sprites.js export');
+  if (!fs.existsSync(path.join(templates, 'trex0.png'))) return check('custom sprites: templates exported', false, 'run node tools/sprites.js export');
+  const png = fs.readFileSync(path.join(templates, 'trex0.png')), tw = png.readUInt32BE(16), th = png.readUInt32BE(20);
   const page = await (await browser.newContext({ viewport: { width: 375, height: 812 } })).newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.route('**/assets/sprites/list.js', r => r.fulfill({ contentType: 'text/javascript', body: "const CUSTOM_SPRITES = ['coin', 'vega0'];" }));
   await page.route('**/assets/sprites/coin.png', r => r.fulfill({ path: path.join(templates, 'donut.png') }));
-  await page.route('**/assets/sprites/vega0.png', r => r.fulfill({ path: path.join(templates, 'trex.png') }));
+  await page.route('**/assets/sprites/vega0.png', r => r.fulfill({ path: path.join(templates, 'trex0.png') }));
   await page.goto(url);
   await page.waitForFunction(() => typeof scene === 'function' && !!scene(), null, { timeout: 15000 });
   await page.click('#main .primary');
@@ -601,8 +678,8 @@ async function customSprites(browser) {
     s.footHitbox();
     return { coin: size('coin'), vega0: size('vega0'), vega1: size('vega1'), walking: s.player.anims.isPlaying, body: Math.round(s.player.body.width), muzzle: Math.round(s.player.y - s.muzzle().y) };
   });
-  check('custom sprites replace the built-in ones (the rest stay generated)', r.coin === '36x24' && r.vega0 === '120x84' && r.vega1 === '70x80' && r.walking, JSON.stringify(r));
-  check("custom sprites: Vega's hitbox and gun position follow his sprite's size", r.body === Math.round(120 * 0.43) && r.muzzle === Math.round(84 * 0.475), JSON.stringify(r));
+  check('custom sprites replace the built-in ones (the rest stay generated)', r.coin === '36x24' && r.vega0 === `${tw}x${th}` && r.vega1 === '70x80' && r.walking, JSON.stringify(r));
+  check("custom sprites: Vega's hitbox and gun position follow his sprite's size", r.body === Math.round(tw * 0.43) && r.muzzle === Math.round(th * 0.475), JSON.stringify(r));
   await page.screenshot({ path: path.join(out, 'custom-sprites.png') }).catch(() => {});
   check('custom sprites: no page errors', errors.length === 0, errors.join(' | '));
 }

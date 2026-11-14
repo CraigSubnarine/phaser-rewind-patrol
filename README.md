@@ -14,6 +14,7 @@ No build step and no asset files: the pixel art is drawn from text grids in the 
 - **30 stages:** 3 timelines (Rome 44 BC, England 1250, the Caribbean 1715) of 10 stages each, on a scrolling top-down road themed to each period. Every stage opens with a card naming the timeline, year and stage; a "time jump" plays between timelines.
   - Stage 5 of each timeline: mid-boss (The Arena Champion, The Siege Engine, The Kraken), drops coffee (full heal) and coins.
   - Stage 10: the timeline's boss (The Iron Centurion, Sir Grimhelm, Captain Blackpowder), drops a time-drive part.
+  - Stages 3 and 8: side-view vehicle stages on the timeline's ride (Rome: chariot, England: horse, Caribbean: rowboat). Stage 3 is a chase (riders ahead look back to shoot at you; you shoot ahead); stage 8 is an escape (riders behind chase you; you shoot backwards). Riders weave and try to ram you; rocks or barrels come at you from ahead and soak up shots.
   - Other stages: formations, snaking lines and dive-bombers, getting busier towards each boss (`STAGES`).
 - **Health:** 3 HP on Normal (5 on Easy). Donuts heal 1. When HP runs out, the run is over.
 - **Coins and the shop:** enemies drop coins. After every stage you visit that timeline's market: 4 cards (up to 2 pieces of that timeline's gear, the rest general gear), plus Reroll and Coffee (+1 HP). Prices rise 50% per copy you own.
@@ -48,6 +49,7 @@ $env:NODE_PATH = "$env:LOCALAPPDATA\npm-cache\_npx\e41f203b7505f1fb\node_modules
 
 - `this.textures.generate()` turns text grids into pixel-art textures: no image files or editor needed.
 - Walk cycle: one top-down body drawing plus a helper that paints the shoes in three positions, played as a 4-frame loop while the road scrolls under Vega.
+- Side-view riders are built from parts: one rider grid (recolored per timeline, mirrored to look backwards) composed onto a two-frame vehicle (legs or wheel spokes alternate). One `compose` helper, no hand-drawn combinations.
 - Roads are a `tileSprite` whose `tilePositionY` slides every frame; each road is drawn once with Graphics into a 256px tile that repeats seamlessly (seeded random so it looks the same every time).
 - Restarting the Phaser scene for a new game wipes every enemy, timer and tween from the last run in one go.
 - Upgrades as data: stats are recomputed from scratch (`computeStats`) whenever something is bought, so stacking and combos can't drift out of sync.

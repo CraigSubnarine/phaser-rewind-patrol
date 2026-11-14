@@ -36,9 +36,15 @@ function installHarness() {
       s.P.dmg = Math.max(s.P.dmg, 5);
       s.P.fireDelay = Math.min(s.P.fireDelay, 120);
       s.P.shots = Math.max(s.P.shots, 3);
-      const targets = s.boss ? [s.boss] : s.enemies.getChildren().filter(e => e.y > 0);
-      const tgt = targets.sort((a, b) => Math.abs(a.x - s.player.x) - Math.abs(b.x - s.player.x))[0];
-      if (tgt && s.player.active) s.placePlayer(s.player.x + Phaser.Math.Clamp(tgt.x - s.player.x, -6, 6), H - 110);
+      window.__obstacles = Math.max(window.__obstacles || 0, s.obstacles.countActive());
+      if (s.view === 'side') { // line up vertically with the nearest rider
+        const tgt = s.enemies.getChildren().filter(e => e.x > 0 && e.x < W).sort((a, b) => Math.abs(a.y - s.player.y) - Math.abs(b.y - s.player.y))[0];
+        if (tgt && s.player.active) s.placePlayer(s.player.x, s.player.y + Phaser.Math.Clamp(tgt.y - s.player.y, -6, 6));
+      } else {
+        const targets = s.boss ? [s.boss] : s.enemies.getChildren().filter(e => e.y > 0);
+        const tgt = targets.sort((a, b) => Math.abs(a.x - s.player.x) - Math.abs(b.x - s.player.x))[0];
+        if (tgt && s.player.active) s.placePlayer(s.player.x + Phaser.Math.Clamp(tgt.x - s.player.x, -6, 6), H - 110);
+      }
       __step(1);
     }
     return until();
@@ -46,7 +52,12 @@ function installHarness() {
 }
 
 const visible = (page, id) => page.evaluate(i => !document.getElementById(i).hidden && !document.getElementById('ui').hidden, id);
-const BOSSES = [[5, 'champion'], [10, 'centurion'], [15, 'siege'], [20, 'grimhelm'], [25, 'kraken'], [30, 'blackpowder']];
+// Checkpoints through a full run, in stage order: vehicle stages (3 = chase, 8 = escape), back on foot, and bosses.
+const CHECKPOINTS = [
+  [3, 'chase', 'rome'], [4, 'top'], [5, 'boss', 'champion'], [8, 'escape', 'rome'], [10, 'boss', 'centurion'],
+  [13, 'chase', 'england'], [15, 'boss', 'siege'], [18, 'escape', 'england'], [20, 'boss', 'grimhelm'],
+  [23, 'chase', 'caribbean'], [25, 'boss', 'kraken'], [28, 'escape', 'caribbean'], [30, 'boss', 'blackpowder'],
+];
 
 // Start a run from the main menu with a given seed and play until the first shop; returns its offers.
 async function firstShop(page, seed) {
@@ -66,7 +77,11 @@ async function run(browser, name, options) {
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push(`${m.text()} ${m.location()?.url ?? ''}`.trim()); });
-  const shot = file => page.screenshot({ path: path.join(out, `${name}-${file}.png`) });
+  // After the bot fast-forwards, the game's real clock would try to catch up minutes at once and stall the next
+  // painted frame; resetting it first keeps screenshots quick. (Real play runs at a steady 60 fps.)
+  const shot = file => page.evaluate(() => game.loop.resetDelta())
+    .then(() => page.screenshot({ path: path.join(out, `${name}-${file}.png`), timeout: 15000 }))
+    .catch(e => check(`${name}: screenshot ${file}`, false, e.message.split('\n')[0]));
 
   await page.goto(url);
   await page.waitForFunction(() => typeof scene === 'function' && !!scene(), null, { timeout: 15000 });
@@ -216,7 +231,30 @@ async function run(browser, name, options) {
     check(`${name}: same seed rolls the same shop, a different seed doesn't`, again === offers1 && other !== offers1, `${offers1} | ${again} | ${other}`);
     await page.click('#shop [data-action=continue]');
 
-    for (const [stage, key] of BOSSES) {
+    for (const [stage, kind, key] of CHECKPOINTS) {
+      if (kind === 'chase' || kind === 'escape') {
+        const v = await page.evaluate(n => {
+          // the bot's late-game build can kill each rider as it appears, so wait for the view, not for riders
+          __bot(`scene().stage === ${n} && scene().view === 'side' && app.state === 'playing'`, 200);
+          const s = scene();
+          __step(30);
+          const vx = s.bullets.getChildren().reduce((sum, b) => sum + b.body.velocity.x, 0);
+          return { stage: s.stage, view: s.view, mode: s.sideMode, anim: s.player.anims.currentAnim?.key, ground: s.ground.visible, road: s.road.visible, shots: Math.sign(vx) };
+        }, stage);
+        const want = { stage, view: 'side', mode: kind, anim: `ride-${key}-${kind === 'chase' ? 'f' : 'b'}`, ground: true, road: false, shots: kind === 'chase' ? 1 : -1 };
+        check(`${name}: stage ${stage} is a side-view ${kind} in ${key}, shooting ${kind === 'chase' ? 'ahead' : 'behind'}`, JSON.stringify(v) === JSON.stringify(want), JSON.stringify(v));
+        await shot(`5-stage-${stage}-${kind}`);
+        continue;
+      }
+      if (kind === 'top') {
+        const v = await page.evaluate(n => {
+          __bot(`scene().stage === ${n} && app.state === 'playing'`, 200);
+          __step(30);
+          return { view: scene().view, anim: scene().player.anims.currentAnim?.key, road: scene().road.visible, obstacles: window.__obstacles };
+        }, stage);
+        check(`${name}: back on foot for stage ${stage} (and rocks showed up in the chase)`, v.view === 'top' && v.anim === 'walk' && v.road && v.obstacles >= 1, JSON.stringify(v));
+        continue;
+      }
       // Look for the boss arriving: by late stages the bot's build can kill it the moment it becomes hittable.
       const got = await page.evaluate(n => { __bot(`scene().stage === ${n} && scene().boss`, 400); return { stage: scene().stage, boss: scene().boss?.texture.key }; }, stage);
       check(`${name}: boss on stage ${stage}`, got.stage === stage && got.boss === key, JSON.stringify(got));

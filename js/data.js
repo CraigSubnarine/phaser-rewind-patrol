@@ -6,20 +6,23 @@ const W = 600, H = 900;
 const FONT = '"Press Start 2P", monospace';
 const ROAD_SPEED = 90; // pixels per second the road slides past: Vega is always walking forward
 const STAGES_PER_ERA = 10;
+// Vehicle stages are seen from the side: sky and hills on top, the ground band below where everything races right.
+const GROUND_Y = 430, BAND_TOP = 470, GROUND_SPEED = 300;
 
 // Three timelines of 10 stages each. Stage 5 of each has a mid-boss, stage 10 the timeline's boss,
 // who holds one of the missing time-drive parts. Every stage opens with a card naming the timeline.
+// Vehicle stages use the timeline's `vehicle`, `rider` colors (swapped onto Vega's side-view sprite), `sky` and `obstacle`.
 const ERAS = [
   { id: 'rome', name: 'Rome', year: '44 BC', road: 'road-rome', bg: 0x2a120f, lines: 0xffb070, enemy: 'legionary', shot: 'spear', hp: 1,
-    part: 'QUARTZ CORE',
+    part: 'QUARTZ CORE', vehicle: 'chariot', rider: { 9: '4', G: '2', 5: '6' }, sky: 0x9a5a3a, obstacle: 'rock',
     mid: { key: 'champion', name: 'THE ARENA\nCHAMPION', hp: 50, shot: 'spear' },
     boss: { key: 'centurion', name: 'THE IRON\nCENTURION', hp: 90, shot: 'orb' } },
   { id: 'england', name: 'England', year: '1250 AD', road: 'road-england', bg: 0x0e1a14, lines: 0x9fe0a0, enemy: 'knight', shot: 'arrow', hp: 2,
-    part: 'TAPE REEL',
+    part: 'TAPE REEL', vehicle: 'horse', rider: { 9: '6', G: '3', 5: '6' }, sky: 0x5c7fa8, obstacle: 'rock',
     mid: { key: 'siege', name: 'THE SIEGE\nENGINE', hp: 80, shot: 'boulder' },
     boss: { key: 'grimhelm', name: 'SIR GRIMHELM', hp: 140, shot: 'orb' } },
   { id: 'caribbean', name: 'The Caribbean', year: '1715 AD', road: 'road-caribbean', bg: 0x071a2e, lines: 0x7fd0ff, enemy: 'pirate', shot: 'cannonball', hp: 2,
-    part: 'SIREN COIL',
+    part: 'SIREN COIL', vehicle: 'boat', rider: { 9: '2', G: 'E', 5: '5' }, sky: 0x4fa3c7, obstacle: 'barrel',
     mid: { key: 'kraken', name: 'THE KRAKEN', hp: 110, shot: 'ink' },
     boss: { key: 'blackpowder', name: 'CAPTAIN\nBLACKPOWDER', hp: 190, shot: 'orb' } },
 ];
@@ -27,14 +30,15 @@ const ERA = Object.fromEntries(ERAS.map(e => [e.id, e]));
 
 // What each non-boss stage of a timeline throws at you: a formation [rows, cols] that flies in and sways,
 // snaking lines [lines, per line], and/or dive-bombers peeling off the formation. It gets busier towards the boss.
+// Stages 3 and 8 are side-view vehicle stages: a chase (you shoot ahead) and an escape (you're chased and shoot back).
 const STAGES = {
   1: { formation: [3, 6] },
   2: { stream: [2, 8] },
-  3: { formation: [4, 7] },
-  4: { formation: [3, 7], divers: true },
+  3: { vehicle: 'chase', riders: 10 },
+  4: { formation: [4, 7], divers: true },
   6: { stream: [3, 8] },
   7: { formation: [5, 7] },
-  8: { formation: [4, 7], divers: true },
+  8: { vehicle: 'escape', riders: 12 },
   9: { formation: [3, 7], stream: [2, 6], divers: true },
 };
 

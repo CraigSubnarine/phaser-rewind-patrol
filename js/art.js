@@ -100,6 +100,117 @@ const PIXEL = {
   spear: 3, arrow: 3, cannonball: 3, ink: 3, orb: 3, laser: 3, arrowUp: 3, coin: 3, spark: 2, streak: 2,
 };
 
+// ---------- Side view (vehicle stages): riders on era vehicles, all facing right ----------
+// Paint grids on top of each other: layers are [rows, column, row]; '.' leaves what's underneath.
+function compose(width, height, layers) {
+  const grid = Array.from({ length: height }, () => Array(width).fill('.'));
+  for (const [rows, c0, r0] of layers) {
+    rows.forEach((row, r) => [...row].forEach((ch, c) => { if (ch !== '.') grid[r0 + r][c0 + c] = ch; }));
+  }
+  return grid.map(row => row.join(''));
+}
+const mirror = rows => rows.map(row => [...row].reverse().join(''));
+const recolor = (rows, map) => rows.map(row => row.replace(/./g, ch => map[ch] ?? ch));
+
+// Vega from the side: cap, face, uniform, arm out front with the pistol. Mirrored, he looks (and shoots) backwards.
+const RIDER = ['..9999..', '..999999', '..8808..', '..8888..', '.GGGG...', '.GGGGG85', '.GGGG...', '.GGGG...', '.FFFF...', '.F..F...'];
+const HORSE_TOP = ['...............7D...', '..............7DDD..', '.............7DD0DD.', '............7DDDDDDD', '...........7DDD...DD',
+  '..DDDDDDDDDDDDD.....', '.7DDDDDDDDDDDDD.....', '7.DDDDDDDDDDDDD.....', '7.DDDDDDDDDDDD......', '...DD.DD...DD.DD....'];
+const HORSE = [ // two frames of legs: stretched out, then tucked under
+  [...HORSE_TOP, '...D...D...D...D....', '..D.....D.D.....D...', '..0.....0.0.....0...'],
+  [...HORSE_TOP, '....D.D.....D.D.....', '....D.D.....D.D.....', '....0.0.....0.0.....'],
+];
+const WHEEL = [
+  ['..777..', '.7.7.7.', '7..7..7', '7777777', '7..7..7', '.7.7.7.', '..777..'],
+  ['..777..', '.7...7.', '7.7.7.7', '7..7..7', '7.7.7.7', '.7...7.', '..777..'],
+];
+const CART = ['4444444444', '4EEEEEEEE4', '4EEEEEEEE4', '4444444444'];
+const HULL = ['D......................D', 'DD....................DD', 'DDDDDDDDDDDDDDDDDDDDDDDD', '.7777777777777777777777.',
+  '..DDDDDDDDDDDDDDDDDDDD..', '....77777777777777777...'];
+const WAKE = ['.1..1..1..1..1..1..1..1.', '1..1..1..1..1..1..1..1..'];
+// Each vehicle: a function turning (rider, frame) into one composed sprite.
+const VEHICLES = {
+  horse: (rider, f) => compose(20, 20, [[HORSE[f], 0, 7], [rider, 6, 3]]),
+  chariot: (rider, f) => compose(28, 20, [[HORSE[f], 8, 7], [rider, 1, 3], [CART, 0, 10], [WHEEL[f], 2, 13]]),
+  boat: (rider, f) => compose(24, 15, [[rider, 8, 0], [[...HULL, WAKE[f]], 0, 8]]),
+};
+// Riders for every timeline: Vega facing forward ('f') and looking back ('b'), and that timeline's enemy, both ways.
+function makeRiders(eras) {
+  for (const era of eras) {
+    const enemy = recolor(RIDER, era.rider);
+    for (const f of [0, 1]) {
+      const build = VEHICLES[era.vehicle];
+      Object.assign(ART, {
+        [`ride-${era.id}-f${f}`]: build(RIDER, f), [`ride-${era.id}-b${f}`]: build(mirror(RIDER), f),
+        [`rideE-${era.id}-f${f}`]: build(enemy, f), [`rideE-${era.id}-b${f}`]: build(mirror(enemy), f),
+      });
+      for (const k of ['ride', 'rideE']) for (const d of ['f', 'b']) PIXEL[`${k}-${era.id}-${d}${f}`] = 4;
+    }
+  }
+}
+makeRiders(ERAS);
+
+// Things in the way on vehicle stages
+ART.rock = ['...5555...', '..556655..', '.55566555.', '5555555555', '5555755555', '.55555555.'];
+ART.barrel = ['.DDDDDD.', 'D777777D', 'DDDDDDDD', 'D777777D', 'D777777D', 'DDDDDDDD', 'D777777D', '.DDDDDD.'];
+
+// Side-view scenery per timeline: distant hills (with a landmark) and the ground band the vehicles race on.
+// Both are tiles scrolled sideways; drawn in whole columns so they repeat seamlessly.
+function makeSides(scene) {
+  const make = (key, w, h, draw) => {
+    const g = scene.make.graphics({ add: false });
+    draw(g, new Phaser.Math.RandomDataGenerator([key]));
+    g.generateTexture(key, w, h);
+    g.destroy();
+  };
+  const hills = (g, color, n) => { for (let i = 0; i < n; i++) g.fillStyle(color).fillCircle(i * (512 / n) + 40, 220, 90 + (i % 3) * 25); };
+  // Rome: temple columns on the hills, a paved road
+  make('hills-rome', 512, 220, g => {
+    hills(g, 0x8a5a3a, 5);
+    g.fillStyle(0xd8c8a8).fillRect(300, 90, 120, 12).fillTriangle(296, 90, 424, 90, 360, 60);
+    for (let x = 306; x < 420; x += 22) g.fillRect(x, 102, 10, 50);
+    g.fillRect(296, 150, 128, 10);
+  });
+  make('ground-rome', 256, 470, (g, rnd) => {
+    g.fillStyle(0x7a5a32).fillRect(0, 0, 256, 470);
+    g.fillStyle(0xb8b0a0).fillRect(0, 30, 256, 10).fillRect(0, 430, 256, 10);
+    g.fillStyle(0x5f5a51).fillRect(0, 40, 256, 390);
+    for (let y = 40; y < 430; y += 39) {
+      for (let x = -rnd.between(0, 40); x < 256;) {
+        const w = rnd.between(40, 80), x0 = Math.max(x, 0), x1 = Math.min(x + w, 256);
+        if (x1 - x0 > 8) g.fillStyle(rnd.pick([0x8d877b, 0x97917f, 0x847e72])).fillRect(x0 + 2, y + 2, x1 - x0 - 4, 35);
+        x += w;
+      }
+    }
+  });
+  // England: a castle on green hills, a muddy track with ruts
+  make('hills-england', 512, 220, g => {
+    hills(g, 0x3f6a35, 5);
+    g.fillStyle(0x7d7d8c).fillRect(80, 80, 120, 80).fillRect(70, 50, 30, 110).fillRect(180, 50, 30, 110);
+    for (let x = 70; x < 210; x += 14) g.fillRect(x, 40, 8, 12);
+    g.fillStyle(0x2a2a3a).fillRect(126, 120, 28, 40);
+  });
+  make('ground-england', 256, 470, (g, rnd) => {
+    g.fillStyle(0x2f5a2a).fillRect(0, 0, 256, 470);
+    g.fillStyle(0x6b4a2a).fillRect(0, 40, 256, 390);
+    g.fillStyle(0x57391f).fillRect(0, 150, 256, 14).fillRect(0, 300, 256, 14);
+    for (let i = 0; i < 50; i++) g.fillStyle(0x8a6a4a).fillRect(rnd.between(0, 250), rnd.between(46, 420), 5, 4);
+    for (let i = 0; i < 40; i++) g.fillStyle(0x3f7a35).fillRect(rnd.between(0, 250), rnd.pick([rnd.between(4, 34), rnd.between(436, 464)]), 6, 3);
+  });
+  // The Caribbean: palm islands on the horizon, open sea
+  make('hills-caribbean', 512, 220, g => {
+    g.fillStyle(0xe8d08a).fillEllipse(130, 215, 220, 50).fillEllipse(400, 218, 160, 40);
+    for (const [x, y] of [[110, 195], [160, 192], [400, 200]]) {
+      g.fillStyle(0x6b3e1f).fillRect(x, y - 60, 6, 60);
+      g.fillStyle(0x2e8b3a).fillTriangle(x + 3, y - 62, x - 30, y - 45, x - 10, y - 70).fillTriangle(x + 3, y - 62, x + 36, y - 45, x + 16, y - 70);
+    }
+  });
+  make('ground-caribbean', 256, 470, (g, rnd) => {
+    g.fillStyle(0x0d4a6e).fillRect(0, 0, 256, 470);
+    for (let i = 0; i < 70; i++) g.fillStyle(rnd.pick([0x2f7fa8, 0x1b5f86])).fillRect(rnd.between(0, 230), rnd.between(0, 465), rnd.between(12, 26), 3);
+  });
+}
+
 // ---------- Roads: one top-down tile per timeline, scrolled under Vega. ----------
 // Everything is drawn in whole rows inside the 256px tile, so it repeats seamlessly.
 function makeRoads(scene) {

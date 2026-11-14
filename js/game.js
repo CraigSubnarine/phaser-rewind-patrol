@@ -8,13 +8,22 @@ class Play extends Phaser.Scene {
     if (!this.textures.exists('vega0')) { // textures and animations are shared by every restart, so make them once
       for (const [key, rows] of Object.entries(ART)) this.textures.generate(key, { data: rows, pixelWidth: PIXEL[key] ?? 4, palette: PAL });
       makeRoads(this);
+      makeSides(this);
       this.anims.create({ key: 'walk', frames: ['vega1', 'vega0', 'vega2', 'vega0'].map(key => ({ key })), frameRate: 10, repeat: -1 });
+      for (const era of ERAS) for (const k of [`ride-${era.id}-f`, `ride-${era.id}-b`, `rideE-${era.id}-f`, `rideE-${era.id}-b`]) {
+        this.anims.create({ key: k, frames: [{ key: `${k}0` }, { key: `${k}1` }], frameRate: 6, repeat: -1 });
+      }
     }
     this.diff = DIFFICULTY[settings.difficulty];
     this.t = 0; // game time that stops while paused (update() isn't called then)
 
     this.cameras.main.setBackgroundColor(0x140a26);
     this.road = this.add.tileSprite(W / 2, H / 2, W, H, 'road-1986');
+    // Side-view scenery for vehicle stages, hidden until one starts.
+    this.hills = this.add.tileSprite(W / 2, GROUND_Y - 110, W, 220, 'hills-rome').setVisible(false);
+    this.ground = this.add.tileSprite(W / 2, GROUND_Y + 235, W, 470, 'ground-rome').setVisible(false);
+    this.view = 'top';
+    this.aim = -Math.PI / 2; // the way Vega shoots: up on foot, ahead or behind in a vehicle
     // Streaks rushing past: only shown during a time jump between timelines.
     this.streaks = Array.from({ length: 40 }, () => {
       const s = this.add.image(Phaser.Math.Between(0, W), Phaser.Math.Between(0, H), 'streak').setDepth(4).setVisible(false);
@@ -40,6 +49,10 @@ class Play extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.enemyShots, (s, shot) => { if (this.hitPlayer()) shot.destroy(); });
     this.physics.add.overlap(this.player, this.enemies, (s, e) => { if (this.hitPlayer()) this.killEnemy(e, false); });
     this.physics.add.overlap(this.player, this.pickups, (s, p) => this.collect(p));
+    // Rocks and barrels on vehicle stages: they hurt to hit and soak up shots (piercing shots go through).
+    this.obstacles = this.physics.add.group();
+    this.physics.add.overlap(this.player, this.obstacles, () => this.hitPlayer());
+    this.physics.add.overlap(this.bullets, this.obstacles, b => { if (b.pierce > 0) b.pierce--; else b.destroy(); });
 
     // false = don't swallow these keys, so the menus keep working with the keyboard.
     this.keys = this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S', false);
@@ -54,7 +67,7 @@ class Play extends Phaser.Scene {
       nextFire: 0, volleys: 0, nextCannon: 0, nextEnemyShot: 0, invulnUntil: 0, shieldNextAt: 0,
       waveActive: false, spawnsLeft: 0, divers: false, boss: null, vacuum: false, stage: 0, era: 0,
       target: { x: this.player.x, y: this.player.y },
-      charge: 0, frozenUntil: 0, testudoUntil: 0, streamTimers: [],
+      charge: 0, frozenUntil: 0, testudoUntil: 0, streamTimers: [], sideMode: null, nextObstacle: 0,
       et: 0, // enemy clock: like t, but it stops while the Siren has enemies frozen
     });
     this.refreshStats();
@@ -145,8 +158,11 @@ class Play extends Phaser.Scene {
       this.invulnUntil = Math.max(this.invulnUntil, this.testudoUntil);
       if (P.testudoShield) this.shield = P.shieldMax;
       jingle([523, 659, 784]);
-    } else if (effect === 'trebuchet') { // a boulder lands on the boss (or mid-screen) in a huge blast
-      const x = this.boss?.ready ? this.boss.x : W / 2, y = this.boss?.ready ? this.boss.y : 260;
+    } else if (effect === 'trebuchet') { // a boulder lands on the boss (or where the enemies are) in a huge blast
+      const foes = this.enemies.getChildren().filter(e => e.x > 0 && e.x < W && e.y > 0 && e.y < H);
+      const avg = k => foes.reduce((sum, e) => sum + e[k], 0) / foes.length;
+      const x = this.boss?.ready ? this.boss.x : foes.length ? avg('x') : W / 2;
+      const y = this.boss?.ready ? this.boss.y : foes.length ? avg('y') : 260;
       const rock = this.add.image(x, -80, 'boulder').setScale(4).setDepth(5);
       this.tweens.add({ targets: rock, y, angle: 360, duration: 500, ease: 'Quad.easeIn', onComplete: () => {
         rock.destroy();
@@ -154,9 +170,10 @@ class Play extends Phaser.Scene {
         this.explode(x, y, 230, 12 * this.dmgNow(), false);
       } });
     } else if (effect === 'broadside') { // a fan of exploding cannonballs
+      const { x, y } = this.muzzle();
       for (let i = 0; i < P.broadside; i++) {
-        const a = -Math.PI / 2 - 1 + 2 * i / (P.broadside - 1);
-        this.spawnBullet(this.player.x, this.player.y - 38, 'cannonball', a, { dmg: 3 * this.dmgNow(), pierce: 0, bounce: P.cannonBounce, explode: P.cannonRadius, cannon: true, speed: 480, scale: 2 });
+        const a = this.aim - 1 + 2 * i / (P.broadside - 1);
+        this.spawnBullet(x, y, 'cannonball', a, { dmg: 3 * this.dmgNow(), pierce: 0, bounce: P.cannonBounce, explode: P.cannonRadius, cannon: true, speed: 480, scale: 2 });
       }
       boom(500, 0.12);
     }
@@ -218,13 +235,42 @@ class Play extends Phaser.Scene {
   startStage(n) {
     this.stage = n;
     this.era = Math.floor((n - 1) / STAGES_PER_ERA);
-    const s = (n - 1) % STAGES_PER_ERA + 1, era = ERAS[this.era], isBoss = s % 5 === 0;
+    const s = (n - 1) % STAGES_PER_ERA + 1, era = ERAS[this.era], isBoss = s % 5 === 0, vehicle = STAGES[s]?.vehicle;
     this.updateHud();
+    const extra = isBoss ? '\nBOSS' : vehicle === 'chase' ? '\nCHASE!\nSHOOT AHEAD' : vehicle === 'escape' ? '\nESCAPE!\nSHOOT BEHIND' : '';
     const card = () => {
-      this.banner(`${era.name.toUpperCase()}\n${era.year}\n\nSTAGE ${n}${isBoss ? '\nBOSS' : ''}`, 2200, 24);
+      this.setView(vehicle ? 'side' : 'top', vehicle);
+      this.banner(`${era.name.toUpperCase()}\n${era.year}\n\nSTAGE ${n}${extra}`, 2200, 24);
       this.time.delayedCall(2400, () => (isBoss ? this.spawnBoss(s === STAGES_PER_ERA) : this.spawnStage(s)));
     };
     if (s === 1) this.timeJump(era, card); else card();
+  }
+
+  // Swap between walking the road (top-down) and a vehicle stage (side view, chasing or being chased).
+  setView(view, mode = null) {
+    if (view === this.view && mode === this.sideMode) return;
+    const era = ERAS[this.era], side = view === 'side';
+    this.view = view;
+    this.sideMode = mode;
+    this.cameras.main.fadeIn(350, 0, 0, 0);
+    this.bullets.clear(true, true); // shots from the last view would fly through the new scenery
+    this.enemyShots.clear(true, true);
+    this.road.setVisible(!side);
+    this.hills.setVisible(side).setTexture(`hills-${era.id}`);
+    this.ground.setVisible(side).setTexture(`ground-${era.id}`);
+    this.cameras.main.setBackgroundColor(side ? era.sky : era.bg);
+    for (const pt of this.partners) pt.setVisible(!side); // in a vehicle their shots come from Vega's ride instead
+    if (side) {
+      this.aim = mode === 'chase' ? 0 : Math.PI;
+      this.player.play(`ride-${era.id}-${mode === 'chase' ? 'f' : 'b'}`);
+      this.player.body.setSize(this.player.width * 0.55, this.player.height * 0.5, true);
+      this.placePlayer(mode === 'chase' ? 140 : W - 140, (BAND_TOP + H) / 2);
+    } else {
+      this.aim = -Math.PI / 2;
+      this.player.play('walk');
+      this.player.body.setSize(30, 30, false).setOffset(20, 38);
+      this.placePlayer(W / 2, H - 110);
+    }
   }
 
   // Between timelines the road fades out, time streaks rush past, and the next timeline's road fades in.
@@ -252,6 +298,7 @@ class Play extends Phaser.Scene {
       for (const p of this.pickups.getChildren().slice()) this.collect(p);
       this.vacuum = false;
       this.enemyShots.clear(true, true);
+      this.obstacles.clear(true, true);
       openShop(this);
     });
   }
@@ -262,6 +309,7 @@ class Play extends Phaser.Scene {
 
   spawnStage(s) {
     const st = STAGES[s];
+    if (st.vehicle) return this.spawnRiders(st.riders + 2 * this.era, st.vehicle);
     const nForm = st.formation ? st.formation[0] * st.formation[1] : 0;
     const nStream = st.stream ? st.stream[0] * st.stream[1] : 0;
     this.spawnsLeft = nStream;
@@ -303,6 +351,31 @@ class Play extends Phaser.Scene {
     }
   }
 
+  // Vehicle stage: riders arrive in groups of four, from ahead in a chase (they look back to shoot at you)
+  // or from behind in an escape. They weave about and now and then try to ram you.
+  spawnRiders(n, mode) {
+    const era = ERAS[this.era], chase = mode === 'chase';
+    this.spawnsLeft = n;
+    this.streamTimers = [];
+    for (let i = 0; i < n; i++) {
+      this.streamTimers.push(this.time.delayedCall(i * 900 + Math.floor(i / 4) * 2600, () => {
+        const y = Phaser.Math.Between(BAND_TOP + 20, H - 50), x0 = chase ? W + 70 : -70;
+        const e = this.spawnEnemy(x0, y, {
+          mode: 'ride', fromX: x0, homeX: chase ? Phaser.Math.Between(330, W - 60) : Phaser.Math.Between(60, 270), baseY: y, phase: Math.random() * 6, enter: 0,
+        });
+        e.hp += 1; // riders are tougher than foot soldiers
+        e.play(`rideE-${era.id}-${chase ? 'b' : 'f'}`);
+        e.body.setSize(e.width * 0.6, e.height * 0.55, true);
+        this.tweens.add({ targets: e, enter: 1, duration: 1400, ease: 'Sine.easeOut' });
+        this.spawnsLeft--;
+      }));
+    }
+    this.divers = false; // riders ram instead (see updateEnemies)
+    this.nextDive = this.t + 3000;
+    this.nextObstacle = this.t + 1500;
+    this.waveActive = true;
+  }
+
   spawnBoss(main) {
     const cfg = main ? ERAS[this.era].boss : ERAS[this.era].mid;
     this.banner(cfg.name, 2200, 26);
@@ -325,26 +398,35 @@ class Play extends Phaser.Scene {
     return this.P.dmg * (this.hp >= this.P.maxHp ? 1 + this.P.fullHpDmg : 1);
   }
 
+  // Where shots leave from: the pistol's muzzle (above Vega on foot; ahead of or behind his ride in a vehicle).
+  muzzle() {
+    return this.view === 'side'
+      ? { x: this.player.x + Math.cos(this.aim) * 44, y: this.player.y - 8 }
+      : { x: this.player.x, y: this.player.y - 38 };
+  }
+
   fire() {
-    const P = this.P, up = -Math.PI / 2, x = this.player.x, y = this.player.y - 38; // from the pistol's muzzle
+    const P = this.P, aim = this.aim, { x, y } = this.muzzle();
     if (this.t >= this.nextFire) {
       this.nextFire = this.t + P.fireDelay;
       this.volleys++;
       for (let i = 0; i < P.shots; i++) { // Extra Barrel fans the shots out
-        this.spawnBullet(x, y, 'laser', up + (i - (P.shots - 1) / 2) * 0.12, { dmg: this.dmgNow(), pierce: P.pierce, bounce: P.bounce });
+        this.spawnBullet(x, y, 'laser', aim + (i - (P.shots - 1) / 2) * 0.12, { dmg: this.dmgNow(), pierce: P.pierce, bounce: P.bounce });
       }
       if (P.longbowEvery && this.volleys % P.longbowEvery === 0) {
-        this.spawnBullet(x, y, 'arrowUp', up, { dmg: 3 * this.dmgNow(), pierce: 99, bounce: P.bounce, speed: 900 });
+        this.spawnBullet(x, y, 'arrowUp', aim, { dmg: 3 * this.dmgNow(), pierce: 99, bounce: P.bounce, speed: 900 });
       }
       if (this.volleys % 2 === 0) {
-        for (const pt of this.partners) {
-          this.spawnBullet(pt.x, pt.y - 24, P.partnerPierce ? 'arrowUp' : 'laser', up, { dmg: 0.6 * P.dmg, pierce: P.partnerPierce, bounce: 0 });
-        }
+        this.partners.forEach((pt, i) => {
+          // On foot partners shoot from beside Vega; in a vehicle they ride along and shoot from just above/below him.
+          const px = this.view === 'side' ? x : pt.x, py = this.view === 'side' ? y + (i % 2 ? 28 : -28) : pt.y - 24;
+          this.spawnBullet(px, py, P.partnerPierce ? 'arrowUp' : 'laser', aim, { dmg: 0.6 * P.dmg, pierce: P.partnerPierce, bounce: 0 });
+        });
       }
     }
     if (P.cannons && this.t >= this.nextCannon) {
       this.nextCannon = this.t + 2000 / P.cannons;
-      this.spawnBullet(x, y, 'cannonball', up, { dmg: 3 * this.dmgNow(), pierce: 0, bounce: P.cannonBounce, explode: P.cannonRadius, cannon: true, speed: 430, scale: 2 });
+      this.spawnBullet(x, y, 'cannonball', aim, { dmg: 3 * this.dmgNow(), pierce: 0, bounce: P.cannonBounce, explode: P.cannonRadius, cannon: true, speed: 430, scale: 2 });
       boom(70, 0.04);
     }
   }
@@ -450,7 +532,10 @@ class Play extends Phaser.Scene {
   drop(type, x, y) {
     const p = this.pickups.create(x, y, type);
     p.type = type;
-    if (type === 'coin' || type === 'donut') p.setVelocityY(120);
+    if (type === 'coin' || type === 'donut') { // fall down the road, or in a vehicle stage drift over towards Vega
+      if (this.view === 'side') p.setVelocityX(Math.sign(this.player.x - x) * 110);
+      else p.setVelocityY(120);
+    }
     return p;
   }
 
@@ -554,9 +639,17 @@ class Play extends Phaser.Scene {
     }
   }
 
+  // Where Vega may go: the lower half on foot; in a vehicle, the ground band, on his half of it
+  // (left when chasing, right when being chased, so there's room to see what's coming).
   setTarget(x, y) {
-    this.target.x = Phaser.Math.Clamp(x, 35, W - 35);
-    this.target.y = Phaser.Math.Clamp(y, H * 0.5, H - 44);
+    if (this.view === 'side') {
+      const chase = this.sideMode === 'chase';
+      this.target.x = Phaser.Math.Clamp(x, chase ? 60 : W * 0.5, chase ? W * 0.5 : W - 60);
+      this.target.y = Phaser.Math.Clamp(y, BAND_TOP, H - 34);
+    } else {
+      this.target.x = Phaser.Math.Clamp(x, 35, W - 35);
+      this.target.y = Phaser.Math.Clamp(y, H * 0.5, H - 44);
+    }
   }
 
   // Put Vega somewhere instantly (used by the playtest bot).
@@ -569,6 +662,10 @@ class Play extends Phaser.Scene {
   update(_, delta) {
     const dt = delta / 1000;
     this.road.tilePositionY -= ROAD_SPEED * dt;
+    if (this.view === 'side') { // racing right: the ground rushes left, the hills drift
+      this.ground.tilePositionX += GROUND_SPEED * dt;
+      this.hills.tilePositionX += GROUND_SPEED * 0.15 * dt;
+    }
     for (const s of this.streaks) {
       s.y += s.speed * dt;
       if (s.y > H + 20) { s.y = -20; s.x = Phaser.Math.Between(0, W); }
@@ -615,13 +712,14 @@ class Play extends Phaser.Scene {
       this.updateBoss();
     } else if (this.boss) this.drawBossBar();
 
-    // Ricochet: shots bounce off the sides and top of the screen.
+    // Ricochet: shots bounce off the screen edges (on foot: sides and top; in a vehicle: all round the ground band).
+    const top = this.view === 'side' ? BAND_TOP - 40 : 6, bottom = this.view === 'side' ? H - 6 : Infinity;
     for (const b of this.bullets.getChildren()) {
       if (b.bounce <= 0) continue;
       const v = b.body.velocity;
       let bounced = false;
       if ((b.x < 6 && v.x < 0) || (b.x > W - 6 && v.x > 0)) { v.x = -v.x; bounced = true; }
-      if (b.y < 6 && v.y < 0) { v.y = -v.y; bounced = true; }
+      if ((b.y < top && v.y < 0) || (b.y > bottom && v.y > 0)) { v.y = -v.y; bounced = true; }
       if (bounced) { b.bounce--; b.hits.clear(); b.setRotation(Math.atan2(v.y, v.x) + Math.PI / 2); }
     }
 
@@ -632,8 +730,8 @@ class Play extends Phaser.Scene {
         if (p.type === 'part' || p.type === 'coffee' || this.vacuum || (p.type === 'coin' && near)) this.physics.moveToObject(p, this.player, 420);
       }
     }
-    for (const g of [this.bullets, this.enemyShots, this.pickups]) {
-      for (const o of g.getChildren().slice()) if (o.y < -50 || o.y > H + 50 || o.x < -50 || o.x > W + 50) o.destroy();
+    for (const g of [this.bullets, this.enemyShots, this.pickups, this.obstacles]) {
+      for (const o of g.getChildren().slice()) if (o.y < -50 || o.y > H + 50 || o.x < -80 || o.x > W + 80) o.destroy();
     }
 
     if (this.waveActive && this.spawnsLeft === 0 && this.enemies.countActive() === 0) this.stageCleared();
@@ -657,9 +755,22 @@ class Play extends Phaser.Scene {
           Object.assign(e, { mode: 'formation', fromX: e.homeX, fromY: -60, enter: 0 });
           this.tweens.add({ targets: e, enter: 1, duration: 1200, ease: 'Sine.easeOut' });
         }
+      } else if (e.mode === 'ride') { // weaving about their spot on the ground band
+        e.x = Phaser.Math.Linear(e.fromX, e.homeX + Math.sin(this.et / 900 + e.phase) * 40, e.enter);
+        e.y = Phaser.Math.Clamp(e.baseY + Math.sin(this.et / 650 + e.phase) * 70, BAND_TOP, H - 34);
+      } else if (e.mode === 'ram') { // charging at Vega; once past him (or at the edge) they fall back into place
+        e.x += e.vx * dt;
+        e.y = Phaser.Math.Clamp(e.y + e.vy * dt, BAND_TOP, H - 34);
+        const past = e.vx < 0 ? e.x < this.player.x - 140 || e.x < 30 : e.x > this.player.x + 140 || e.x > W - 30;
+        if (past) {
+          Object.assign(e, { mode: 'ride', fromX: e.x, baseY: e.y, enter: 0 });
+          this.tweens.add({ targets: e, enter: 1, duration: 1400, ease: 'Sine.easeOut' });
+        }
       }
     }
 
+    const pressure = (1 + 0.2 * this.era + 0.04 * ((this.stage - 1) % STAGES_PER_ERA)) * this.diff.fire;
+    const side = this.view === 'side';
     if (this.divers && this.t > this.nextDive) {
       this.nextDive = this.t + 1500 / this.diff.fire;
       const e = Phaser.Utils.Array.GetRandom(this.enemies.getChildren().filter(x => x.mode === 'formation' && x.enter === 1));
@@ -668,14 +779,27 @@ class Play extends Phaser.Scene {
         beep(280, 90, 0.03);
       }
     }
+    if (side && this.waveActive && this.t > this.nextDive) { // a rider tries to ram Vega
+      this.nextDive = this.t + 2600 / pressure;
+      const e = Phaser.Utils.Array.GetRandom(this.enemies.getChildren().filter(x => x.mode === 'ride' && x.enter === 1));
+      if (e && this.player.active) {
+        Object.assign(e, { mode: 'ram', vx: Math.sign(this.player.x - e.x) * 340, vy: (this.player.y - e.y) * 0.9 });
+        beep(220, 120, 0.04);
+      }
+    }
+    if (side && this.waveActive && this.t > this.nextObstacle) { // rocks or barrels come at you from ahead
+      this.nextObstacle = this.t + Phaser.Math.Between(1100, 2000) / pressure;
+      this.obstacles.create(W + 50, Phaser.Math.Between(BAND_TOP + 10, H - 40), ERAS[this.era].obstacle).setVelocityX(-GROUND_SPEED).setDepth(1);
+    }
 
     if (this.t > this.nextEnemyShot) {
       // fire gets faster with each timeline and with each stage inside it
-      const pressure = (1 + 0.2 * this.era + 0.04 * ((this.stage - 1) % STAGES_PER_ERA)) * this.diff.fire;
-      const shooters = this.enemies.getChildren().filter(x => x.y > 0 && x.y < H * 0.7);
+      const shooters = this.enemies.getChildren().filter(x => (side ? x.x > 0 && x.x < W : x.y > 0 && x.y < H * 0.7));
       this.nextEnemyShot = this.t + (shooters.length ? 1000 : 300) / pressure;
       const e = Phaser.Utils.Array.GetRandom(shooters);
-      if (e) this.shoot(e.x, e.y + 20, ERAS[this.era].shot, this.diff.shotSpeed, Phaser.Math.Clamp(this.angleToPlayer(e.x, e.y) * 0.5, -0.5, 0.5));
+      // On foot they lob shots roughly your way; riders aim straight at you.
+      if (e && side) this.shoot(e.x + Math.sign(this.player.x - e.x) * 24, e.y - 6, ERAS[this.era].shot, this.diff.shotSpeed, this.angleToPlayer(e.x, e.y));
+      else if (e) this.shoot(e.x, e.y + 20, ERAS[this.era].shot, this.diff.shotSpeed, Phaser.Math.Clamp(this.angleToPlayer(e.x, e.y) * 0.5, -0.5, 0.5));
     }
   }
 

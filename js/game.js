@@ -1,0 +1,725 @@
+// Rewind Patrol: the game scene. Loaded last (after data.js, art.js and ui.js).
+
+class Play extends Phaser.Scene {
+  constructor() { super('play'); }
+
+  create(data) {
+    this.playing = !!data?.play;
+    if (!this.textures.exists('vega0')) { // textures and animations are shared by every restart, so make them once
+      for (const [key, rows] of Object.entries(ART)) this.textures.generate(key, { data: rows, pixelWidth: PIXEL[key] ?? 4, palette: PAL });
+      makeRoads(this);
+      this.anims.create({ key: 'walk', frames: ['vega1', 'vega0', 'vega2', 'vega0'].map(key => ({ key })), frameRate: 10, repeat: -1 });
+    }
+    this.diff = DIFFICULTY[settings.difficulty];
+    this.t = 0; // game time that stops while paused (update() isn't called then)
+
+    this.cameras.main.setBackgroundColor(0x140a26);
+    this.road = this.add.tileSprite(W / 2, H / 2, W, H, 'road-1986');
+    // Streaks rushing past: only shown during a time jump between timelines.
+    this.streaks = Array.from({ length: 40 }, () => {
+      const s = this.add.image(Phaser.Math.Between(0, W), Phaser.Math.Between(0, H), 'streak').setDepth(4).setVisible(false);
+      s.speed = Phaser.Math.Between(400, 900);
+      return s.setAlpha(Phaser.Math.FloatBetween(0.3, 0.8));
+    });
+
+    // Vega walks the road the whole time; the road scrolling under him is what moves him forward.
+    this.player = this.physics.add.sprite(W / 2, H - 110, 'vega0').setDepth(2).play('walk');
+    this.player.body.setSize(30, 30, false).setOffset(20, 38); // forgiving hitbox: just the shoulders and cap
+    this.sparks = this.add.particles(0, 0, 'spark', {
+      speed: { min: 60, max: 280 }, lifespan: { min: 250, max: 650 }, scale: { start: 1.4, end: 0 },
+      tint: [0xffffff, 0xffd23b, 0xff4fd8, 0x4ff0ff], emitting: false,
+    }).setDepth(3);
+
+    if (!this.playing) return; // main-menu backdrop: Vega walking down a 1986 street
+
+    this.bullets = this.physics.add.group();
+    this.enemyShots = this.physics.add.group();
+    this.enemies = this.physics.add.group();
+    this.pickups = this.physics.add.group();
+    this.physics.add.overlap(this.bullets, this.enemies, (b, e) => this.bulletHit(b, e));
+    this.physics.add.overlap(this.player, this.enemyShots, (s, shot) => { if (this.hitPlayer()) shot.destroy(); });
+    this.physics.add.overlap(this.player, this.enemies, (s, e) => { if (this.hitPlayer()) this.killEnemy(e, false); });
+    this.physics.add.overlap(this.player, this.pickups, (s, p) => this.collect(p));
+
+    // false = don't swallow these keys, so the menus keep working with the keyboard.
+    this.keys = this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S', false);
+    this.hud = this.add.text(14, 14, '', { fontFamily: FONT, fontSize: '14px', color: '#ffffff', lineSpacing: 8, stroke: '#000000', strokeThickness: 4 }).setDepth(10);
+    this.shieldRing = this.add.graphics().setDepth(3);
+    this.partners = [];
+
+    // Everything about this run. The seeded generator rolls the shop, so the same seed gives the same offers.
+    this.rng = new Phaser.Math.RandomDataGenerator([app.seed]);
+    Object.assign(this, {
+      score: 0, coins: 0, owned: {}, combos: [], parts: 0, best: store.get(bestKey(), 0), newBest: false,
+      nextFire: 0, volleys: 0, nextCannon: 0, nextEnemyShot: 0, invulnUntil: 0, shieldNextAt: 0,
+      waveActive: false, spawnsLeft: 0, divers: false, boss: null, vacuum: false, stage: 0, era: 0,
+      target: { x: this.player.x, y: this.player.y },
+      charge: 0, frozenUntil: 0, testudoUntil: 0, streamTimers: [],
+      et: 0, // enemy clock: like t, but it stops while the Siren has enemies frozen
+    });
+    this.refreshStats();
+    this.hp = this.P.maxHp;
+    this.shield = this.P.shieldMax;
+    updateItemBtn();
+    this.startStage(1);
+  }
+
+  // ----- Upgrades -----
+  // Recompute Vega's stats from the upgrades owned. Returns the combos this just unlocked.
+  refreshStats() {
+    const { stats, combos } = computeStats(this.owned, this.diff.hp);
+    const unlocked = combos.filter(c => !this.combos.includes(c));
+    this.P = stats;
+    this.combos = combos;
+    while (this.partners.length < stats.partners) this.partners.push(this.add.image(this.player.x, this.player.y, 'partner').setDepth(2));
+    if (this.hp > stats.maxHp) this.hp = stats.maxHp;
+    return unlocked;
+  }
+
+  // Called by the shop. Returns the combos the purchase unlocked (maybe none), or null if it couldn't be bought.
+  buy(u) {
+    const cost = priceOf(u, this.owned);
+    if (this.coins < cost || (this.owned[u.id] || 0) >= u.max) return null;
+    this.coins -= cost;
+    if (u.active) { // one active item at a time: a new one replaces the old, starting uncharged
+      for (const other of UPGRADES) if (other.active) delete this.owned[other.id];
+      this.charge = 0;
+    }
+    this.owned[u.id] = (this.owned[u.id] || 0) + 1;
+    const unlocked = this.refreshStats();
+    if (u.heal) this.hp = Math.min(this.hp + u.heal, this.P.maxHp);
+    if (u.id === 'scutum') this.shield = this.P.shieldMax;
+    this.updateHud();
+    return unlocked;
+  }
+
+  // ----- Active items -----
+  chargeNeeded() {
+    return this.P.active ? this.P.active.active.charge / this.P.chargeMult : Infinity;
+  }
+
+  addCharge(n) {
+    if (!this.P.active) return;
+    const was = this.charge >= this.chargeNeeded();
+    this.charge = Math.min(this.charge + n, this.chargeNeeded());
+    if (!was && this.charge >= this.chargeNeeded()) { this.toast('ITEM READY', this.player.x, this.player.y - 60, '#ff4fd8'); beep(1320, 80); }
+    updateItemBtn();
+  }
+
+  isBossStage() {
+    return ((this.stage - 1) % STAGES_PER_ERA + 1) % 5 === 0;
+  }
+
+  // Fire the held item if it's charged. Returns true if it went off.
+  useActive() {
+    const item = this.P?.active;
+    if (!item || app.state !== 'playing' || !this.player.active || this.charge < this.chargeNeeded()) return false;
+    const P = this.P, effect = item.active.effect;
+    if (effect === 'skip' && (this.isBossStage() || !this.waveActive)) {
+      this.toast(this.isBossStage() ? 'NOT ON BOSS STAGES' : 'NOTHING TO SKIP', this.player.x, this.player.y - 60, '#ff4fd8');
+      return false;
+    }
+    if (effect === 'clear') { // Air Support: everything on screen goes, bosses take a big hit
+      this.banner('AIR SUPPORT!', 1200, 26);
+      this.cameras.main.flash(300, 255, 240, 200);
+      boom(600, 0.14);
+      for (const e of this.enemies.getChildren().slice()) if (e.y > -20) this.killEnemy(e, true);
+      this.enemyShots.clear(true, true);
+      if (this.boss?.ready) this.damage(this.boss, 30 * this.dmgNow(), true);
+    } else if (effect === 'skip') { // VCR Remote: the stage is over
+      this.banner('FAST FORWARD >>', 1200, 24);
+      jingle([1046, 1318, 1568]);
+      this.streamTimers.forEach(t => t.remove());
+      this.spawnsLeft = 0;
+      for (const e of this.enemies.getChildren().slice()) { this.sparks.explode(8, e.x, e.y); e.destroy(); }
+      this.enemyShots.clear(true, true);
+      this.stageCleared();
+    } else if (effect === 'freeze') { // Siren: enemies stop, their shots vanish
+      this.banner('SIREN!', 1000, 26);
+      jingle([880, 660, 880, 660]);
+      this.frozenUntil = this.t + 5000;
+      this.enemyShots.clear(true, true);
+    } else if (effect === 'invuln') { // Testudo
+      this.banner('TESTUDO!', 1000, 26);
+      this.testudoUntil = this.t + P.testudoMs;
+      this.invulnUntil = Math.max(this.invulnUntil, this.testudoUntil);
+      if (P.testudoShield) this.shield = P.shieldMax;
+      jingle([523, 659, 784]);
+    } else if (effect === 'trebuchet') { // a boulder lands on the boss (or mid-screen) in a huge blast
+      const x = this.boss?.ready ? this.boss.x : W / 2, y = this.boss?.ready ? this.boss.y : 260;
+      const rock = this.add.image(x, -80, 'boulder').setScale(4).setDepth(5);
+      this.tweens.add({ targets: rock, y, angle: 360, duration: 500, ease: 'Quad.easeIn', onComplete: () => {
+        rock.destroy();
+        this.cameras.main.shake(400, 0.02);
+        this.explode(x, y, 230, 12 * this.dmgNow(), false);
+      } });
+    } else if (effect === 'broadside') { // a fan of exploding cannonballs
+      for (let i = 0; i < P.broadside; i++) {
+        const a = -Math.PI / 2 - 1 + 2 * i / (P.broadside - 1);
+        this.spawnBullet(this.player.x, this.player.y - 38, 'cannonball', a, { dmg: 3 * this.dmgNow(), pierce: 0, bounce: P.cannonBounce, explode: P.cannonRadius, cannon: true, speed: 480, scale: 2 });
+      }
+      boom(500, 0.12);
+    }
+    this.charge = 0; // after the effect, so its own kills don't refill it
+    updateItemBtn();
+    return true;
+  }
+
+  // Four cards: up to 2 pieces of this timeline's gear, the rest general gear, nothing already maxed out.
+  rollOffers() {
+    const era = ERAS[this.era].id;
+    const open = UPGRADES.filter(u => (this.owned[u.id] || 0) < u.max);
+    const local = this.rng.shuffle(open.filter(u => u.era === era)).slice(0, 2);
+    const general = this.rng.shuffle(open.filter(u => !u.era)).slice(0, 4 - local.length);
+    return [...local, ...general];
+  }
+
+  // ----- HUD and messages -----
+  setStreaks(on, tint = 0xffffff) {
+    for (const s of this.streaks) s.setVisible(on).setTint(tint);
+  }
+
+  banner(text, ms, size = 22) {
+    this.lastBanner = text;
+    const t = this.add.text(W / 2, H * 0.42, text, {
+      fontFamily: FONT, fontSize: `${size}px`, color: '#ff4fd8', align: 'center', stroke: '#140a26', strokeThickness: 6, lineSpacing: 14,
+    }).setOrigin(0.5).setDepth(10).setAlpha(0);
+    this.tweens.add({ targets: t, alpha: 1, duration: 250, hold: ms - 500, yoyo: true, onComplete: () => t.destroy() });
+  }
+
+  // Small floating text, e.g. BLOCKED or CRIT.
+  toast(text, x, y, color = '#ffffff') {
+    const t = this.add.text(x, y, text, { fontFamily: FONT, fontSize: '12px', color, stroke: '#000000', strokeThickness: 4 }).setOrigin(0.5).setDepth(10);
+    this.tweens.add({ targets: t, y: y - 40, alpha: 0, duration: 800, onComplete: () => t.destroy() });
+  }
+
+  updateHud() {
+    const shield = this.shield ? `+${this.shield}` : '';
+    this.hud.setText(`SCORE ${this.score}   STAGE ${this.stage}\nHP ${this.hp}/${this.P.maxHp}${shield}  $${Math.floor(this.coins)}  DRIVE ${this.parts}/${ERAS.length}`);
+  }
+
+  addScore(n) {
+    this.score += n;
+    if (this.score > this.best) {
+      this.best = this.score;
+      this.newBest = true;
+      store.set(bestKey(), this.best);
+    }
+    this.updateHud();
+  }
+
+  addCoins(n) {
+    this.coins += n * this.P.coinMult;
+    this.updateHud();
+  }
+
+  // ----- Stage flow -----
+  // Stage card ("ROME / 44 BC / STAGE 3"), then that stage's enemies or boss. Stage 1 of each timeline starts with a time jump.
+  startStage(n) {
+    this.stage = n;
+    this.era = Math.floor((n - 1) / STAGES_PER_ERA);
+    const s = (n - 1) % STAGES_PER_ERA + 1, era = ERAS[this.era], isBoss = s % 5 === 0;
+    this.updateHud();
+    const card = () => {
+      this.banner(`${era.name.toUpperCase()}\n${era.year}\n\nSTAGE ${n}${isBoss ? '\nBOSS' : ''}`, 2200, 24);
+      this.time.delayedCall(2400, () => (isBoss ? this.spawnBoss(s === STAGES_PER_ERA) : this.spawnStage(s)));
+    };
+    if (s === 1) this.timeJump(era, card); else card();
+  }
+
+  // Between timelines the road fades out, time streaks rush past, and the next timeline's road fades in.
+  timeJump(era, then) {
+    jingle([392, 523, 659, 784, 1046]);
+    this.banner('TIME JUMP!', 1300, 26);
+    this.tweens.add({ targets: this.road, alpha: 0, duration: 300 });
+    this.setStreaks(true, era.lines);
+    this.time.delayedCall(1400, () => {
+      this.road.setTexture(era.road);
+      this.cameras.main.setBackgroundColor(era.bg);
+      this.tweens.add({ targets: this.road, alpha: 1, duration: 300 });
+      this.setStreaks(false);
+      then();
+    });
+  }
+
+  // Stage done: a coin bonus, every coin left on the road flies to Vega, then the shop.
+  stageCleared() {
+    this.waveActive = false;
+    this.addCoins(3 + 2 * this.era);
+    this.vacuum = true;
+    this.time.delayedCall(1300, () => {
+      if (this.hp <= 0) return;
+      for (const p of this.pickups.getChildren().slice()) this.collect(p);
+      this.vacuum = false;
+      this.enemyShots.clear(true, true);
+      openShop(this);
+    });
+  }
+
+  afterShop() {
+    this.startStage(this.stage + 1);
+  }
+
+  spawnStage(s) {
+    const st = STAGES[s];
+    const nForm = st.formation ? st.formation[0] * st.formation[1] : 0;
+    const nStream = st.stream ? st.stream[0] * st.stream[1] : 0;
+    this.spawnsLeft = nStream;
+    if (st.formation) this.formation(...st.formation);
+    if (st.stream) this.stream(...st.stream, nForm ? 2500 : 0);
+    this.divers = !!st.divers;
+    this.nextDive = this.t + 2500;
+    this.waveActive = true;
+  }
+
+  spawnEnemy(x, y, props) {
+    const era = ERAS[this.era];
+    return Object.assign(this.enemies.create(x, y, era.enemy), { hp: era.hp }, props);
+  }
+
+  // A grid that flies in, then sways side to side.
+  formation(rows, cols) {
+    const sx = 70, sy = 62, left = W / 2 - (cols - 1) * sx / 2;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const e = this.spawnEnemy(W / 2, -60, {
+          mode: 'formation', homeX: left + c * sx, homeY: 130 + r * sy, fromX: Phaser.Math.Between(0, W), fromY: -60 - r * 40, enter: 0,
+        });
+        this.tweens.add({ targets: e, enter: 1, delay: (r * cols + c) * 45, duration: 1100, ease: 'Sine.easeOut' });
+      }
+    }
+  }
+
+  // Lines of enemies snaking down the screen; any that get past just leave.
+  stream(lines, per, delay = 0) {
+    this.streamTimers = [];
+    for (let s = 0; s < lines; s++) {
+      for (let i = 0; i < per; i++) {
+        this.streamTimers.push(this.time.delayedCall(delay + s * 2600 + i * 260, () => {
+          this.spawnEnemy(W / 2, -40, { mode: 'stream', age: 0, side: s % 2 ? -1 : 1, phase: s * 0.9 });
+          this.spawnsLeft--;
+        }));
+      }
+    }
+  }
+
+  spawnBoss(main) {
+    const cfg = main ? ERAS[this.era].boss : ERAS[this.era].mid;
+    this.banner(cfg.name, 2200, 26);
+    const b = this.boss = this.physics.add.image(W / 2, -110, cfg.key).setDepth(1);
+    Object.assign(b, { cfg, main, ready: false });
+    b.maxHp = b.hp = Math.round(cfg.hp * this.diff.bossHp);
+    this.tweens.add({ targets: b, y: 180, duration: 2200, ease: 'Sine.easeOut', onComplete: () => { b.ready = true; b.readyAt = this.et; } });
+    this.bossColliders = [
+      this.physics.add.overlap(b, this.bullets, (boss, bullet) => this.bulletHit(bullet, boss)),
+      this.physics.add.overlap(this.player, b, () => this.hitPlayer()),
+    ];
+    this.bossBar = this.add.graphics().setDepth(10);
+    this.nextFan = this.t + 3000;
+    this.nextAim = this.t + 4200;
+  }
+
+  // ----- Vega's shooting -----
+  // Damage right now: Aquila Standard adds a bonus while at full HP.
+  dmgNow() {
+    return this.P.dmg * (this.hp >= this.P.maxHp ? 1 + this.P.fullHpDmg : 1);
+  }
+
+  fire() {
+    const P = this.P, up = -Math.PI / 2, x = this.player.x, y = this.player.y - 38; // from the pistol's muzzle
+    if (this.t >= this.nextFire) {
+      this.nextFire = this.t + P.fireDelay;
+      this.volleys++;
+      for (let i = 0; i < P.shots; i++) { // Extra Barrel fans the shots out
+        this.spawnBullet(x, y, 'laser', up + (i - (P.shots - 1) / 2) * 0.12, { dmg: this.dmgNow(), pierce: P.pierce, bounce: P.bounce });
+      }
+      if (P.longbowEvery && this.volleys % P.longbowEvery === 0) {
+        this.spawnBullet(x, y, 'arrowUp', up, { dmg: 3 * this.dmgNow(), pierce: 99, bounce: P.bounce, speed: 900 });
+      }
+      if (this.volleys % 2 === 0) {
+        for (const pt of this.partners) {
+          this.spawnBullet(pt.x, pt.y - 24, P.partnerPierce ? 'arrowUp' : 'laser', up, { dmg: 0.6 * P.dmg, pierce: P.partnerPierce, bounce: 0 });
+        }
+      }
+    }
+    if (P.cannons && this.t >= this.nextCannon) {
+      this.nextCannon = this.t + 2000 / P.cannons;
+      this.spawnBullet(x, y, 'cannonball', up, { dmg: 3 * this.dmgNow(), pierce: 0, bounce: P.cannonBounce, explode: P.cannonRadius, cannon: true, speed: 430, scale: 2 });
+      boom(70, 0.04);
+    }
+  }
+
+  // Angle in radians: -PI/2 is straight up.
+  spawnBullet(x, y, tex, angle, o) {
+    const speed = o.speed ?? this.P.bulletSpeed;
+    const b = this.bullets.create(x, y, tex).setRotation(angle + Math.PI / 2).setScale(o.scale ?? 1);
+    b.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    return Object.assign(b, { dmg: o.dmg, pierce: o.pierce, bounce: o.bounce, explode: o.explode ?? 0, cannon: !!o.cannon, hits: new Set() });
+  }
+
+  // A shot hits an enemy or the boss. Piercing shots keep going; each shot hits a given target once per bounce.
+  bulletHit(b, target) {
+    if (!b.active || !target.active || b.hits.has(target)) return;
+    const isBoss = target === this.boss;
+    if (isBoss && !target.ready) return void b.destroy(); // can't be hurt while arriving
+    b.hits.add(target);
+    this.damage(target, b.dmg, isBoss, b.cannon);
+    if (b.explode) this.explode(b.x, b.y, b.explode, b.dmg, b.cannon);
+    if (b.pierce > 0) b.pierce--;
+    else b.destroy();
+  }
+
+  damage(target, d, isBoss, cannon = false) {
+    if (!target.active || target.hp <= 0) return;
+    const P = this.P;
+    if (isBoss) d *= P.bossDmg * (cannon ? P.cannonBossMult : 1);
+    if (Math.random() < P.crit) {
+      d *= isBoss && P.bossCritMult ? P.bossCritMult : P.critMult;
+      this.toast('CRIT', target.x, target.y - 24, '#ffd23b');
+    }
+    target.hp -= d;
+    if (isBoss) this.addCharge(0.1); // hits on a boss charge the active item too
+    if (target.hp <= 0) return isBoss ? this.bossDown() : this.killEnemy(target, true);
+    target.setTintFill(0xffffff);
+    this.time.delayedCall(50, () => target.active && target.clearTint());
+    if (!isBoss) beep(620, 25, 0.03);
+  }
+
+  // Cannonball blast: hurts everything within r.
+  explode(x, y, r, dmg, cannon) {
+    const ring = this.add.circle(x, y, r, 0xffd23b, 0.35).setDepth(3);
+    this.tweens.add({ targets: ring, scale: 1.3, alpha: 0, duration: 250, onComplete: () => ring.destroy() });
+    this.sparks.explode(20, x, y);
+    boom(160, 0.08);
+    for (const e of this.enemies.getChildren().slice()) {
+      if (Phaser.Math.Distance.Between(x, y, e.x, e.y) < r) this.damage(e, dmg, false);
+    }
+    if (this.boss?.ready && Phaser.Math.Distance.Between(x, y, this.boss.x, this.boss.y) < r + 50) this.damage(this.boss, dmg, true, cannon);
+  }
+
+  // ----- Enemies -----
+  // Angle is measured from straight down: 0 = down, positive = towards the right.
+  shoot(x, y, tex, speed, angle) {
+    const s = this.enemyShots.create(x, y, tex);
+    s.setVelocity(Math.sin(angle) * speed, Math.cos(angle) * speed).setRotation(-angle);
+  }
+
+  angleToPlayer(x, y) {
+    return Math.atan2(this.player.x - x, this.player.y - y);
+  }
+
+  killEnemy(e, byPlayer) {
+    this.sparks.explode(14, e.x, e.y);
+    boom(90);
+    if (byPlayer) {
+      this.addScore(100 * (this.era + 1));
+      this.addCharge(1);
+      const roll = Math.random();
+      if (roll < 0.55) this.drop('coin', e.x, e.y);
+      else if (roll < 0.58) this.drop('donut', e.x, e.y); // rare: heals 1 HP
+    }
+    e.destroy();
+  }
+
+  bossDown() {
+    const b = this.boss;
+    this.boss = null;
+    this.bossColliders.forEach(c => c.destroy());
+    this.bossBar.destroy();
+    b.disableBody(false, false);
+    this.enemyShots.clear(true, true);
+    this.addScore((b.main ? 5000 : 2500) * (this.era + 1));
+    this.cameras.main.shake(700, 0.015);
+    for (let i = 0; i < 7; i++) {
+      this.time.delayedCall(i * 120, () => {
+        this.sparks.explode(30, b.x + Phaser.Math.Between(-45, 45), b.y + Phaser.Math.Between(-35, 35));
+        boom(220, 0.1);
+      });
+    }
+    this.time.delayedCall(900, () => {
+      this.coinBurst(b.x, b.y, b.main ? 25 : 12);
+      if (b.main) this.drop('part', b.x, b.y); // collecting it leads on to the shop and the next timeline
+      else { // mid-boss: coffee for a full heal, then the shop
+        this.drop('coffee', b.x, b.y);
+        this.time.delayedCall(2200, () => this.stageCleared());
+      }
+      b.destroy();
+    });
+  }
+
+  drop(type, x, y) {
+    const p = this.pickups.create(x, y, type);
+    p.type = type;
+    if (type === 'coin' || type === 'donut') p.setVelocityY(120);
+    return p;
+  }
+
+  coinBurst(x, y, n) {
+    for (let i = 0; i < n; i++) {
+      this.drop('coin', x + Phaser.Math.Between(-50, 50), y + Phaser.Math.Between(-30, 30)).setVelocity(Phaser.Math.Between(-80, 80), Phaser.Math.Between(-40, 100));
+    }
+  }
+
+  collect(p) {
+    const type = p.type;
+    p.destroy();
+    if (type === 'coin') {
+      this.addCoins(1);
+      beep(1500, 25, 0.02);
+    } else if (type === 'donut') {
+      this.hp = Math.min(this.hp + 1, this.P.maxHp);
+      this.toast('+1 HP', this.player.x, this.player.y - 50, '#ff4fd8');
+      beep(1200, 50);
+    } else if (type === 'coffee') {
+      this.hp = this.P.maxHp;
+      this.banner('COFFEE BREAK!\nFULL HP', 1200, 18);
+      jingle([523, 784, 1046]);
+    } else if (type === 'part') {
+      this.parts++;
+      this.addScore(2000);
+      jingle([523, 659, 784, 1046]);
+      this.banner(`GOT THE\n${ERAS[this.era].part}!\n\nTIME DRIVE ${this.parts}/${ERAS.length}`, 2800);
+      const last = this.stage === ERAS.length * STAGES_PER_ERA;
+      this.time.delayedCall(3100, () => (last ? this.victory() : this.stageCleared()));
+    }
+    this.updateHud();
+  }
+
+  // Returns true if something hit Vega (even if the shield or armor stopped the damage), false while he's immune.
+  hitPlayer() {
+    if (!this.player.active || this.t < this.invulnUntil) return false;
+    if (this.shield > 0) {
+      this.shield--;
+      this.invulnUntil = this.t + 600;
+      this.toast('BLOCKED', this.player.x, this.player.y - 50, '#4ff0ff');
+      beep(900, 80);
+      this.updateHud();
+      return true;
+    }
+    if (Math.random() < this.P.armor) {
+      this.invulnUntil = this.t + 600;
+      this.toast('CLANG!', this.player.x, this.player.y - 50, '#c8c8d4');
+      beep(700, 60);
+      return true;
+    }
+    this.hp--;
+    this.sparks.explode(30, this.player.x, this.player.y);
+    boom(450, 0.12);
+    this.cameras.main.shake(260, 0.012);
+    this.updateHud();
+    if (this.hp <= 0) {
+      this.player.disableBody(true, true);
+      for (const pt of this.partners) pt.setVisible(false);
+      this.sparks.explode(60, this.player.x, this.player.y);
+      this.time.delayedCall(1300, () => endGame(false, this));
+      return true;
+    }
+    this.invulnUntil = this.t + this.P.invuln;
+    this.tweens.add({ targets: this.player, alpha: 0.25, duration: 120, yoyo: true, repeat: Math.max(1, Math.round(this.P.invuln / 240) - 1), onComplete: () => this.player.setAlpha(1) });
+    return true;
+  }
+
+  // The drive is fixed: one last time jump home to 1986, and Vega walks off up the street.
+  victory() {
+    this.invulnUntil = Infinity;
+    this.banner('TIME DRIVE\nFIXED!', 1600, 26);
+    this.time.delayedCall(1700, () => {
+      jingle([392, 523, 659, 784, 1046]);
+      this.tweens.add({ targets: this.road, alpha: 0, duration: 300 });
+      this.setStreaks(true, 0xff4fd8);
+    });
+    this.time.delayedCall(3100, () => {
+      this.road.setTexture('road-1986');
+      this.cameras.main.setBackgroundColor(0x140a26);
+      this.tweens.add({ targets: this.road, alpha: 1, duration: 300 });
+      this.setStreaks(false);
+      this.banner('NEON CITY\n1986', 1800, 28);
+      this.tweens.add({ targets: [this.player, ...this.partners], y: -120, delay: 600, duration: 2200 });
+    });
+    this.time.delayedCall(5600, () => endGame(true, this));
+  }
+
+  // ----- Controls -----
+  // Mouse: Vega heads for the pointer. Touch: the target moves by however far the finger drags, so the finger never
+  // has to cover the character. Either way Vega walks there at his move speed (Running Shoes make it faster).
+  steer(e) {
+    if (app.state !== 'playing' || !this.playing || !this.player?.active) return;
+    const r = this.game.canvas.getBoundingClientRect(), k = W / r.width;
+    if (e.pointerType === 'mouse') {
+      this.setTarget((e.clientX - r.left) * k, (e.clientY - r.top) * k);
+    } else if (drag) {
+      this.setTarget(this.target.x + (e.clientX - drag.x) * k * 1.4, this.target.y + (e.clientY - drag.y) * k * 1.4);
+      drag.x = e.clientX;
+      drag.y = e.clientY;
+    }
+  }
+
+  setTarget(x, y) {
+    this.target.x = Phaser.Math.Clamp(x, 35, W - 35);
+    this.target.y = Phaser.Math.Clamp(y, H * 0.5, H - 44);
+  }
+
+  // Put Vega somewhere instantly (used by the playtest bot).
+  placePlayer(x, y) {
+    this.setTarget(x, y);
+    this.player.setPosition(this.target.x, this.target.y);
+  }
+
+  // ----- Every frame -----
+  update(_, delta) {
+    const dt = delta / 1000;
+    this.road.tilePositionY -= ROAD_SPEED * dt;
+    for (const s of this.streaks) {
+      s.y += s.speed * dt;
+      if (s.y > H + 20) { s.y = -20; s.x = Phaser.Math.Between(0, W); }
+    }
+    if (!this.playing) return;
+    this.t += delta;
+    const frozen = this.t < this.frozenUntil;
+    if (!frozen) this.et += delta;
+    const P = this.P;
+
+    if (this.player.active && app.state === 'playing') {
+      const k = this.keys;
+      const kx = (k.RIGHT.isDown || k.D.isDown) - (k.LEFT.isDown || k.A.isDown);
+      const ky = (k.DOWN.isDown || k.S.isDown) - (k.UP.isDown || k.W.isDown);
+      if (kx || ky) this.setTarget(this.target.x + kx * P.moveSpeed * dt, this.target.y + ky * P.moveSpeed * dt);
+      const dx = this.target.x - this.player.x, dy = this.target.y - this.player.y, dist = Math.hypot(dx, dy), step = P.moveSpeed * dt;
+      if (dist > step) this.player.setPosition(this.player.x + dx / dist * step, this.player.y + dy / dist * step);
+      else this.player.setPosition(this.target.x, this.target.y);
+      this.fire();
+    }
+
+    // Partners walk beside Vega, one on each side.
+    this.partners.forEach((pt, i) => {
+      const ease = Math.min(1, dt * 8);
+      pt.x += (this.player.x + (i % 2 ? 62 : -62) - pt.x) * ease;
+      pt.y += (this.player.y + 14 - pt.y) * ease;
+    });
+
+    // Scutum: recharge one shield charge at a time.
+    if (this.shield < P.shieldMax) {
+      if (this.t >= this.shieldNextAt) { this.shield++; this.shieldNextAt = this.t + P.shieldRecharge; this.updateHud(); }
+    } else this.shieldNextAt = this.t + P.shieldRecharge;
+    this.shieldRing.clear();
+    if (this.player.active && this.t < this.testudoUntil) this.shieldRing.lineStyle(5, 0xffd23b, 0.8).strokeCircle(this.player.x, this.player.y + 8, 50);
+    if (this.shield > 0 && this.player.active) this.shieldRing.lineStyle(3, 0x4ff0ff, 0.6).strokeCircle(this.player.x, this.player.y + 8, 44);
+
+    // While the Siren is on, enemies and the boss stand still (tinted blue) and don't shoot.
+    for (const e of [...this.enemies.getChildren(), this.boss].filter(Boolean)) {
+      if (frozen) e.setTint(0x88ccff);
+      else if (e.isTinted && e.tintTopLeft === 0x88ccff) e.clearTint();
+    }
+    if (!frozen) {
+      this.updateEnemies(dt);
+      this.updateBoss();
+    } else if (this.boss) this.drawBossBar();
+
+    // Ricochet: shots bounce off the sides and top of the screen.
+    for (const b of this.bullets.getChildren()) {
+      if (b.bounce <= 0) continue;
+      const v = b.body.velocity;
+      let bounced = false;
+      if ((b.x < 6 && v.x < 0) || (b.x > W - 6 && v.x > 0)) { v.x = -v.x; bounced = true; }
+      if (b.y < 6 && v.y < 0) { v.y = -v.y; bounced = true; }
+      if (bounced) { b.bounce--; b.hits.clear(); b.setRotation(Math.atan2(v.y, v.x) + Math.PI / 2); }
+    }
+
+    // Coins within magnet range (or every pickup once a stage is cleared) fly to Vega; coffee and parts always do.
+    if (this.player.active) {
+      for (const p of this.pickups.getChildren()) {
+        const near = Phaser.Math.Distance.Between(p.x, p.y, this.player.x, this.player.y) < P.magnet;
+        if (p.type === 'part' || p.type === 'coffee' || this.vacuum || (p.type === 'coin' && near)) this.physics.moveToObject(p, this.player, 420);
+      }
+    }
+    for (const g of [this.bullets, this.enemyShots, this.pickups]) {
+      for (const o of g.getChildren().slice()) if (o.y < -50 || o.y > H + 50 || o.x < -50 || o.x > W + 50) o.destroy();
+    }
+
+    if (this.waveActive && this.spawnsLeft === 0 && this.enemies.countActive() === 0) this.stageCleared();
+  }
+
+  updateEnemies(dt) {
+    const sway = Math.sin(this.et / 900) * 50, bob = Math.sin(this.et / 400) * 6;
+    for (const e of this.enemies.getChildren().slice()) {
+      if (e.mode === 'formation') {
+        e.x = Phaser.Math.Linear(e.fromX, e.homeX + sway, e.enter);
+        e.y = Phaser.Math.Linear(e.fromY, e.homeY + bob, e.enter);
+      } else if (e.mode === 'stream') {
+        e.age += dt;
+        e.y = -40 + e.age * 150;
+        e.x = W / 2 + e.side * Math.sin(e.age * 1.6 + e.phase) * W * 0.36;
+        if (e.y > H + 40) e.destroy();
+      } else if (e.mode === 'dive') {
+        e.x += e.vx * dt;
+        e.y += e.vy * dt;
+        if (e.y > H + 40) { // walked past: come back in from the top to its old spot
+          Object.assign(e, { mode: 'formation', fromX: e.homeX, fromY: -60, enter: 0 });
+          this.tweens.add({ targets: e, enter: 1, duration: 1200, ease: 'Sine.easeOut' });
+        }
+      }
+    }
+
+    if (this.divers && this.t > this.nextDive) {
+      this.nextDive = this.t + 1500 / this.diff.fire;
+      const e = Phaser.Utils.Array.GetRandom(this.enemies.getChildren().filter(x => x.mode === 'formation' && x.enter === 1));
+      if (e && this.player.active) {
+        Object.assign(e, { mode: 'dive', vx: (this.player.x - e.x) * 0.45, vy: 300 });
+        beep(280, 90, 0.03);
+      }
+    }
+
+    if (this.t > this.nextEnemyShot) {
+      // fire gets faster with each timeline and with each stage inside it
+      const pressure = (1 + 0.2 * this.era + 0.04 * ((this.stage - 1) % STAGES_PER_ERA)) * this.diff.fire;
+      const shooters = this.enemies.getChildren().filter(x => x.y > 0 && x.y < H * 0.7);
+      this.nextEnemyShot = this.t + (shooters.length ? 1000 : 300) / pressure;
+      const e = Phaser.Utils.Array.GetRandom(shooters);
+      if (e) this.shoot(e.x, e.y + 20, ERAS[this.era].shot, this.diff.shotSpeed, Phaser.Math.Clamp(this.angleToPlayer(e.x, e.y) * 0.5, -0.5, 0.5));
+    }
+  }
+
+  drawBossBar() {
+    const b = this.boss, bw = W - 120;
+    this.bossBar.clear().fillStyle(0x000000, 0.6).fillRect(60, 64, bw, 12).fillStyle(0xff4fd8).fillRect(60, 64, bw * Math.max(0, b.hp) / b.maxHp, 12);
+  }
+
+  updateBoss() {
+    const b = this.boss;
+    if (!b) return;
+    this.drawBossBar();
+    if (!b.ready) return;
+
+    b.x = W / 2 + Math.sin((this.et - b.readyAt) / 1300) * (W / 2 - 90);
+    const rage = b.hp < b.maxHp / 2 ? 0.65 : 1; // attacks come faster below half health
+    const speed = this.diff.shotSpeed / 250, shot = b.cfg.shot;
+    if (this.t > this.nextFan) {
+      this.nextFan = this.t + 1800 * rage / this.diff.fire;
+      const n = b.main && rage < 1 ? 7 : 5;
+      for (let i = 0; i < n; i++) this.shoot(b.x, b.y + 40, shot, 220 * speed, -0.7 + 1.4 * i / (n - 1));
+      beep(180, 120, 0.04);
+    }
+    if (this.t > this.nextAim) {
+      this.nextAim = this.t + 2600 * rage / this.diff.fire;
+      for (let i = 0; i < 3; i++) {
+        this.time.delayedCall(i * 150, () => {
+          if (this.boss && this.player.active) this.shoot(b.x, b.y + 40, shot, 320 * speed, this.angleToPlayer(b.x, b.y));
+        });
+      }
+    }
+  }
+}
+
+// Phaser draws text once, so wait (briefly) for the arcade font before starting the game.
+Promise.race([document.fonts?.load(`16px ${FONT}`), new Promise(r => setTimeout(r, 2000))]).finally(() => {
+  game = new Phaser.Game({
+    type: Phaser.AUTO,
+    width: W,
+    height: H,
+    backgroundColor: '#140a26',
+    pixelArt: true,
+    physics: { default: 'arcade' },
+    scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+    scene: Play,
+  });
+});

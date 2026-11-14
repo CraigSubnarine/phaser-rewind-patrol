@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
-  :root { --bg: #140a26; --panel: #1f1238; --btn: #33205a; --text: #f3e9ff; --muted: #c9b6e8; --pink: #ff4fd8; --cyan: #4ff0ff; }
+  :root { --bg: #140a26; --panel: #1f1238; --btn: #33205a; --text: #f3e9ff; --muted: #c9b6e8; --pink: #ff4fd8; --cyan: #4ff0ff; --gold: #ffd23b; }
   /* No scrolling, pinch/double-tap zoom, pull-to-refresh, text selection or long-press menu while playing on a phone. */
   html, body {
     margin: 0; height: 100%; background: var(--bg); overflow: hidden;
@@ -20,7 +20,7 @@
   /* Menus are plain HTML on top of the game canvas: real buttons are easy to tap, style, and use with a keyboard. */
   #ui { position: fixed; inset: 0; z-index: 1; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgb(20 10 38 / .72); }
   #ui[hidden], .screen[hidden], #pauseBtn[hidden] { display: none; }
-  .screen { width: min(360px, 100%); max-height: 100%; overflow-y: auto; box-sizing: border-box; background: var(--panel); border: 2px solid var(--pink); border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 12px; text-align: center; box-shadow: 0 0 28px rgb(255 79 216 / .35); }
+  .screen { width: min(360px, 100%); max-height: 100%; overflow-y: auto; touch-action: pan-y; box-sizing: border-box; background: var(--panel); border: 2px solid var(--pink); border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 12px; text-align: center; box-shadow: 0 0 28px rgb(255 79 216 / .35); }
   h1, h2 { font-family: "Press Start 2P", monospace; font-weight: 400; margin: 0 0 4px; line-height: 1.35; }
   h1 { font-size: 1.6rem; color: var(--pink); text-shadow: 0 0 12px var(--pink), 3px 3px 0 #2b7c8a; }
   h2 { font-size: 1rem; color: var(--cyan); text-shadow: 0 0 8px var(--cyan); }
@@ -30,6 +30,7 @@
   button, .seg label { font: inherit; font-size: 1.05rem; min-height: 48px; border: 0; border-radius: 10px; background: var(--btn); color: var(--text); cursor: pointer; -webkit-tap-highlight-color: transparent; }
   button.primary { background: var(--pink); color: #1a0820; font-weight: 700; }
   button:hover, .seg label:hover { filter: brightness(1.15); }
+  button:disabled { opacity: .45; cursor: default; filter: none; }
   button:focus-visible, .seg label:has(input:focus-visible), .row:has(input:focus-visible) { outline: 3px solid var(--cyan); outline-offset: 2px; }
   a { color: var(--cyan); padding: 8px; }
   fieldset { border: 0; margin: 0; padding: 0; display: flex; gap: 6px; }
@@ -38,10 +39,35 @@
   .seg label { flex: 1; display: flex; align-items: center; justify-content: center; font-size: .95rem; }
   .seg input { position: absolute; opacity: 0; pointer-events: none; }
   .seg label:has(input:checked) { background: var(--cyan); color: #10232a; font-weight: 700; }
-  .row { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: 0 12px; background: var(--btn); border-radius: 10px; cursor: pointer; }
-  .row input { width: 22px; height: 22px; accent-color: var(--cyan); }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; padding: 0 12px; background: var(--btn); border-radius: 10px; cursor: pointer; }
+  .row input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--cyan); }
+  #seedInput { font: 600 1rem/1 monospace; width: 9em; padding: 8px; border: 1px solid var(--muted); border-radius: 6px; background: var(--bg); color: var(--text); text-transform: uppercase; user-select: text; -webkit-user-select: text; }
   .hint { font-size: .85rem; }
+  .build { font-size: .85rem; text-align: left; }
   #pauseBtn { position: fixed; z-index: 1; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); width: 48px; padding: 0; opacity: .85; }
+  /* Active item: bottom-right, its bar fills as it charges; it glows when ready. */
+  #itemBtn { position: fixed; z-index: 1; right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); width: 136px; min-height: 56px; padding: 6px 10px; display: flex; flex-direction: column; justify-content: center; gap: 6px; font-size: .8rem; line-height: 1.2; opacity: .92; }
+  #itemBtn[hidden] { display: none; }
+  #itemBtn .meter { display: block; height: 6px; border-radius: 3px; background: rgb(0 0 0 / .4); overflow: hidden; }
+  #itemBtn .meter span { display: block; height: 100%; width: calc(var(--charge, 0) * 100%); background: var(--cyan); }
+  #itemBtn.ready { background: var(--pink); color: #1a0820; font-weight: 700; animation: glow .7s ease-in-out infinite alternate; }
+  @keyframes glow { to { box-shadow: 0 0 20px var(--pink); } }
+  @media (prefers-reduced-motion: reduce) { #itemBtn.ready { animation: none; } }
+  /* Shop */
+  .shop { width: min(440px, 100%); gap: 10px; }
+  .shop-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .shop-head h2 { margin: 0; text-align: left; }
+  #shopCoins { font: .75rem "Press Start 2P", monospace; color: var(--gold); white-space: nowrap; }
+  #shopNote { font-size: .85rem; text-align: left; color: var(--pink); }
+  #shopItems { display: flex; flex-direction: column; gap: 8px; }
+  .card { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 10px 12px; text-align: left; font-size: 1rem; }
+  .card .tag { grid-column: 1 / -1; font-size: .7rem; letter-spacing: .06em; color: var(--cyan); }
+  .card .price { font: .75rem "Press Start 2P", monospace; color: var(--gold); align-self: center; }
+  .card small { grid-column: 1 / -1; color: var(--muted); font-size: .85rem; }
+  .card .combo { grid-column: 1 / -1; color: var(--pink); font-size: .8rem; }
+  .card.sold { opacity: .3; }
+  .shop-row { display: flex; gap: 8px; }
+  .shop-row button { flex: 1; font-size: .95rem; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
 </head>
@@ -60,9 +86,23 @@
     <h2>NEON CITY, 1986</h2>
     <p>Officer Vega answers a break-in call at Chronotech Labs and grabs the strange device on the workbench. One blinding flash later, he's walking down a Roman road with the lab's prototype time drive clipped to his duty belt.</p>
     <p>The drive is busted. Its three missing parts are scattered through history, and every army that spots a time-traveling cop wants him gone.</p>
-    <p>Walk the roads of three timelines, ten stages each. Beat the bosses, recover the parts, and get back to 1986.</p>
-    <p class="hint">Drag anywhere to move (mouse or arrow keys on a computer). Vega fires automatically. Gold badges power up your gun, donuts are bonus points, and coffee is an extra life.</p>
+    <p>Walk the roads of three timelines, ten stages each. Grab the coins enemies drop, gear up at the market between stages, beat the bosses, recover the parts, and get back to 1986.</p>
+    <p class="hint">Drag anywhere to move (mouse or arrow keys on a computer). Vega fires automatically. Donuts heal; coffee from a mid-boss heals fully. Active items charge as you take enemies down: tap the item button (or press Space) when it glows.</p>
+    <label class="row">Run seed <input id="seedInput" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
+    <p class="hint">Same seed, same shop rolls. Share it to race a friend on the same run.</p>
     <button class="primary" data-action="start">Start patrol</button>
+  </section>
+
+  <section class="screen shop" id="shop" hidden>
+    <div class="shop-head"><h2 id="shopTitle">MARKET</h2><span id="shopCoins"></span></div>
+    <p id="shopNote"></p>
+    <div id="shopItems"></div>
+    <div class="shop-row">
+      <button id="rerollBtn" data-action="reroll">Reroll</button>
+      <button id="healBtn" data-action="heal">Coffee</button>
+    </div>
+    <p class="build" id="shopBuild"></p>
+    <button class="primary" data-action="continue">Next stage &rarr;</button>
   </section>
 
   <section class="screen" id="settings" hidden>
@@ -80,6 +120,7 @@
 
   <section class="screen" id="pause" hidden>
     <h2>PAUSED</h2>
+    <p class="build" id="pauseBuild"></p>
     <button class="primary" data-action="resume">Resume</button>
     <button data-action="settings">Settings</button>
     <button data-action="menu">Main menu</button>
@@ -88,802 +129,17 @@
   <section class="screen" id="end" hidden>
     <h2 id="endTitle"></h2>
     <p id="endText"></p>
-    <button class="primary" data-action="start">Play again</button>
+    <p class="build" id="endBuild"></p>
+    <button class="primary" data-action="again">Play again</button>
     <button data-action="menu">Main menu</button>
   </section>
 </div>
 <button id="pauseBtn" aria-label="Pause" hidden>&#10074;&#10074;</button>
+<button id="itemBtn" hidden><span id="itemName"></span><span class="meter"><span></span></span></button>
 
-<script>
-// ponytail: one fixed portrait screen, like a vertical arcade cabinet. Desktop gets it letterboxed; phones fill the width.
-const W = 600, H = 900;
-const FONT = '"Press Start 2P", monospace';
-const ROAD_SPEED = 90; // pixels per second the road slides past: Vega is always walking forward
-
-// ---------- Pixel art: each sprite is rows of palette characters ('.' = transparent), turned into textures by Phaser. ----------
-const PAL = {
-  0: '#000000', 1: '#ffffff', 2: '#ff3b3b', 3: '#3b7bff', 4: '#ffd23b', 5: '#7d7d8c', 6: '#c8c8d4', 7: '#6b3e1f',
-  8: '#f0b98a', 9: '#1b1b2f', A: '#ff4fd8', B: '#4ff0ff', C: '#2e8b3a', D: '#b5651d', E: '#8a1c1c', F: '#4b4b63',
-  G: '#3a56d4', H: '#8b3fbf', I: '#c77dff',
-};
-const ART = {
-  legionary: ['.....22.....', '....2222....', '...444444...', '..44888844..', '...408804...', '....8888....',
-              '..E222222E..', '.4E222222E4.', '.4422222244.', '..22444422..', '...7....7...', '...7....7...'],
-  knight: ['.....33.....', '....6666....', '...666666...', '..66666666..', '..60000006..', '..66666666..',
-           '..33311333..', '.6333113336.', '.6311111136.', '..33311333..', '...5....5...', '...5....5...'],
-  pirate: ['...222222...', '..22122122..', '..88888888..', '..80088808..', '..88888888..', '...877778...',
-           '..1E1E1E1E..', '.81E1E1E1E8.', '.8E1E1E1E18.', '..1E1E1E1E..', '...9....9...', '...9....9...'],
-  // Mid-bosses (stage 5 of each timeline)
-  champion: ['........4444........', '.......444444.......', '......44444444......', '....DDDDDDDDDDDD....',
-             '...DDDDDDDDDDDDDD...', '..DDD0606060606DDD..', '..DDD6060606060DDD..', '..DDD0606060606DDD..',
-             '...DDDDDDDDDDDDDD...', '....DDDDDDDDDDDD....', '.......888888.......', '..8888887777888888..',
-             '.888888877778888888.', '.888888877778888888.', '..4444444444444444..', '...EEEEEEEEEEEEEE...'],
-  siege: ['........7777........', '.......755557.......', '........7777........', '.........77.........',
-          '.........77.........', '..DDDDDDDDDDDDDDDD..', '..D77D77D77D77D77D..', '..DDDDDDDDDDDDDDDD..',
-          '..D77777777777777D..', '..D77700777700777D..', '..D77700777700777D..', '..D77777777777777D..',
-          '..DDDDDDDDDDDDDDDD..', '..D77777777777777D..', '..D77777700777777D..', '..DDDDDDDDDDDDDDDD..',
-          '.55..55......55..55.'],
-  kraken: ['.......HHHHHH.......', '.....HHHHHHHHHH.....', '....HHHIHHHHIHHH....', '...HHHHHHHHHHHHHH...',
-           '...HHHHHHHHHHHHHH...', '...HH111HHHH111HH...', '...HH100HHHH001HH...', '...HHHHHHHHHHHHHH...',
-           '....HHHHHHHHHHHH....', '..H.HH.HH..HH.HH.H..', '.H..H..H....H..H..H.', 'H..H..H......H..H..H',
-           'I..I..I......I..I..I'],
-  // Timeline bosses (stage 10 of each timeline): each one holds a missing time-drive part
-  centurion: ['........2222........', '......22222222......', '.....2222222222.....', '......44444444......',
-              '....444444444444....', '...44444444444444...', '...44488888888444...', '...44800888800844...',
-              '...44888888888844...', '...44488888888444...', '....448888888844....', '.....4488EE8844.....',
-              '......44888844......', '..EEEE22222222EEEE..', '.E4444222222224444E.', '.E4444222442224444E.',
-              '..EEEE22222222EEEE..'],
-  grimhelm: ['.5................5.', '.55..............55.', '..55..FFFFFFFF..55..', '...5FFFFFFFFFFFF5...',
-             '....FFFFFFFFFFFF....', '...FFFFFFFFFFFFFF...', '...FF0000000000FF...', '...FF0220000220FF...',
-             '...FF0000000000FF...', '...FFFFFFFFFFFFFF...', '...FF5F5F5F5F5FFF...', '....FFFFFFFFFFFF....',
-             '.....FFFFFFFFFF.....', '..FFFFF666666FFFFF..', '.FFFFFF6EEEE6FFFFFF.', '.FFFFFF6EEEE6FFFFFF.',
-             '..FFFFF666666FFFFF..'],
-  blackpowder: ['.......000000.......', '....000001100000....', '..0000001111000000..', '.000000001100000000.',
-                '44444444444444444444', '...88888888888888...', '...88008888880088...', '...88888888888888...',
-                '...88888877888888...', '...77777777777777...', '...77770000007777...', '....777777777777....',
-                '.....7777777777.....', '..EEEEE444444EEEEE..', '.EEEEEEE4444EEEEEEE.', '.EEEEEEEE44EEEEEEEE.'],
-  // Shots
-  spear: ['.8.', '.8.', '.8.', '.8.', '.8.', '.8.', '.8.', '.6.', '666', '.6.'],
-  arrow: ['1.1', '.1.', '.8.', '.8.', '.8.', '.8.', '.8.', '666', '.6.'],
-  cannonball: ['.555.', '56655', '55555', '55555', '.555.'],
-  boulder: ['.5555.', '556655', '565555', '555555', '555575', '.5555.'],
-  ink: ['.HHHH.', 'HHIHHH', 'HIHHHH', 'HHHHHH', 'HHHHHH', '.HHHH.'],
-  orb: ['.AAAA.', 'AA11AA', 'A1111A', 'A1111A', 'AA11AA', '.AAAA.'],
-  laser: ['11', 'BB', 'BB', 'BB', 'BB', 'BB'],
-  // Pickups
-  badge: ['....4....', '...444...', '444444444', '.4443444.', '..44444..', '.444.444.', '.44...44.'],
-  donut: ['..AAAAA..', '.A4AABAA.', 'AAA...A1A', 'AAA...AAA', '.DAAAAAD.', '..DDDDD..'],
-  coffee: ['..1..1...', '...1..1..', '1111111..', '13333311.', '1333331.1', '13333311.', '1111111..', '.11111...'],
-  part: ['...BBB...', '.B.BBB.B.', '..BBBBB..', 'BBB111BBB', 'BBB1A1BBB', 'BBB111BBB', '..BBBBB..', '.B.BBB.B.', '...BBB...'],
-  spark: ['11', '11'],
-  streak: ['1', '1', '1', '1'],
-};
-// Officer Vega seen from directly above, facing up: pistol held out front in both hands, arms, shoulders,
-// and the police cap (black brim, gold badge). The feet are added separately so they can step.
-const VEGA = [
-  '......55......',
-  '......55......',
-  '......55......',
-  '.....8888.....',
-  '.....G..G.....',
-  '.....G..G.....',
-  '.....G..G.....',
-  '..GGGGGGGGGG..',
-  '.GGGG0000GGGG.',
-  '.GGG994499GGG.',
-  '.GGG999999GGG.',
-  '.GGGG9999GGGG.',
-  '..GGGGGGGGGG..',
-  '...GGGGGGGG...',
-  '..............',
-  '..............',
-];
-// Put a 2x3 shoe at each [column, row]. Feet are under the body, so they only show where the body isn't.
-const withFeet = feet => {
-  const grid = VEGA.map(row => [...row]);
-  for (const [c, r] of feet) {
-    for (let y = 0; y < 3; y++) for (let x = 0; x < 2; x++) if (grid[r + y][c + x] === '.') grid[r + y][c + x] = '6';
-  }
-  return grid.map(row => row.join(''));
-};
-// Standing: just the toes poke out in front. Walking: one whole foot out front, the other's heel behind.
-ART.vega0 = withFeet([[3, 5], [9, 5]]);
-ART.vega1 = withFeet([[3, 2], [9, 13]]);
-ART.vega2 = withFeet([[3, 13], [9, 2]]);
-
-const PIXEL = {
-  vega0: 5, vega1: 5, vega2: 5, champion: 6, siege: 6, kraken: 6, centurion: 6, grimhelm: 6, blackpowder: 6,
-  spear: 3, arrow: 3, cannonball: 3, ink: 3, orb: 3, laser: 3, spark: 2, streak: 2,
-};
-
-// ---------- Roads: one top-down tile per timeline, scrolled under Vega. ----------
-// Everything is drawn in whole rows inside the 256px tile, so it repeats seamlessly.
-function makeRoads(scene) {
-  const TILE = 256, L = 120, R = 480; // the road runs from x=120 to x=480
-  const make = (key, draw) => {
-    const g = scene.make.graphics({ add: false });
-    draw(g, new Phaser.Math.RandomDataGenerator([key])); // seeded, so the same road every time
-    g.generateTexture(key, W, TILE);
-    g.destroy();
-  };
-  make('road-1986', g => { // city street: sidewalks, asphalt, white edge lines, yellow center dashes
-    g.fillStyle(0x55555f).fillRect(0, 0, W, TILE);
-    for (let y = 0; y < TILE; y += 64) g.fillStyle(0x45454f).fillRect(0, y, L - 8, 3).fillRect(R + 8, y, W - R - 8, 3);
-    g.fillStyle(0x2a2a33).fillRect(L - 8, 0, R - L + 16, TILE);
-    g.fillStyle(0xffffff).fillRect(L + 4, 0, 4, TILE).fillRect(R - 8, 0, 4, TILE);
-    for (let y = 0; y < TILE; y += 64) g.fillStyle(0xffd23b).fillRect(W / 2 - 3, y, 6, 40);
-  });
-  make('road-rome', (g, rnd) => { // paved Roman road with curb stones through dry ground
-    g.fillStyle(0x7a5a32).fillRect(0, 0, W, TILE);
-    for (let i = 0; i < 60; i++) g.fillStyle(rnd.pick([0x6a4c28, 0x8a6a3e])).fillRect(rnd.between(0, W - 4), rnd.between(0, TILE - 4), 4, 4);
-    g.fillStyle(0xb8b0a0).fillRect(L - 10, 0, 10, TILE).fillRect(R, 0, 10, TILE);
-    g.fillStyle(0x5f5a51).fillRect(L, 0, R - L, TILE); // mortar between the stones
-    for (let y = 0; y < TILE; y += 32) {
-      for (let x = L - rnd.between(0, 30); x < R;) {
-        const w = rnd.between(36, 70), x0 = Math.max(x, L), x1 = Math.min(x + w, R);
-        if (x1 - x0 > 8) g.fillStyle(rnd.pick([0x8d877b, 0x97917f, 0x847e72])).fillRect(x0 + 2, y + 2, x1 - x0 - 4, 28);
-        x += w;
-      }
-    }
-  });
-  make('road-england', (g, rnd) => { // muddy cart track with wheel ruts through grass
-    g.fillStyle(0x2f5a2a).fillRect(0, 0, W, TILE);
-    for (let i = 0; i < 90; i++) g.fillStyle(rnd.pick([0x3f7a35, 0x264a22])).fillRect(rnd.between(0, W - 6), rnd.between(0, TILE - 4), 6, 3);
-    g.fillStyle(0x6b4a2a).fillRect(L, 0, R - L, TILE);
-    for (let y = 0; y < TILE; y += 16) g.fillRect(L - rnd.between(0, 10), y, 10, 16).fillRect(R + rnd.between(0, 10) - 10, y, 10, 16);
-    g.fillStyle(0x57391f).fillRect(L + 90, 0, 14, TILE).fillRect(R - 104, 0, 14, TILE);
-    for (let i = 0; i < 40; i++) g.fillStyle(0x8a6a4a).fillRect(rnd.between(L + 6, R - 10), rnd.between(0, TILE - 4), 4, 4);
-  });
-  make('road-caribbean', (g, rnd) => { // wooden pier over the sea
-    g.fillStyle(0x0d4a6e).fillRect(0, 0, W, TILE);
-    for (let i = 0; i < 40; i++) g.fillStyle(0x2f7fa8).fillRect(rnd.between(0, W - 24), rnd.between(0, TILE - 3), rnd.between(10, 24), 3);
-    for (let y = 0; y < TILE; y += 32) {
-      g.fillStyle(0x3b2614).fillRect(L, y, R - L, 32);
-      g.fillStyle(rnd.pick([0x8a5a2b, 0x7d5126, 0x936233])).fillRect(L, y + 2, R - L, 28);
-      g.fillStyle(0x3b2614).fillRect(L + 12, y + 14, 4, 4).fillRect(R - 16, y + 14, 4, 4); // nails
-    }
-    for (let y = 0; y < TILE; y += 128) g.fillStyle(0x4a2f17).fillRect(L - 14, y + 40, 14, 20).fillRect(R, y + 40, 14, 20); // posts
-  });
-}
-
-// ---------- The story: three timelines of 10 stages each. Stage 5 of each has a mid-boss, stage 10 the timeline's boss,
-// who holds one of the missing time-drive parts. Every stage opens with a card naming the timeline. ----------
-const STAGES_PER_ERA = 10;
-const ERAS = [
-  { name: 'Rome', year: '44 BC', road: 'road-rome', bg: 0x2a120f, lines: 0xffb070, enemy: 'legionary', shot: 'spear', hp: 1,
-    part: 'QUARTZ CORE',
-    mid: { key: 'champion', name: 'THE ARENA\nCHAMPION', hp: 50, shot: 'spear' },
-    boss: { key: 'centurion', name: 'THE IRON\nCENTURION', hp: 90, shot: 'orb' } },
-  { name: 'England', year: '1250 AD', road: 'road-england', bg: 0x0e1a14, lines: 0x9fe0a0, enemy: 'knight', shot: 'arrow', hp: 2,
-    part: 'TAPE REEL',
-    mid: { key: 'siege', name: 'THE SIEGE\nENGINE', hp: 80, shot: 'boulder' },
-    boss: { key: 'grimhelm', name: 'SIR GRIMHELM', hp: 140, shot: 'orb' } },
-  { name: 'The Caribbean', year: '1715 AD', road: 'road-caribbean', bg: 0x071a2e, lines: 0x7fd0ff, enemy: 'pirate', shot: 'cannonball', hp: 2,
-    part: 'SIREN COIL',
-    mid: { key: 'kraken', name: 'THE KRAKEN', hp: 110, shot: 'ink' },
-    boss: { key: 'blackpowder', name: 'CAPTAIN\nBLACKPOWDER', hp: 190, shot: 'orb' } },
-];
-// What each non-boss stage of a timeline throws at you: a formation [rows, cols] that flies in and sways,
-// snaking lines [lines, per line], and/or dive-bombers peeling off the formation. It gets busier towards the boss.
-const STAGES = {
-  1: { formation: [3, 6] },
-  2: { stream: [2, 8] },
-  3: { formation: [4, 7] },
-  4: { formation: [3, 7], divers: true },
-  6: { stream: [3, 8] },
-  7: { formation: [5, 7] },
-  8: { formation: [4, 7], divers: true },
-  9: { formation: [3, 7], stream: [2, 6], divers: true },
-};
-const DIFFICULTY = {
-  easy:   { label: 'Easy',   lives: 5, fire: 0.6, shotSpeed: 200, bossHp: 0.8 },
-  normal: { label: 'Normal', lives: 3, fire: 1,   shotSpeed: 250, bossHp: 1 },
-  hard:   { label: 'Hard',   lives: 3, fire: 1.5, shotSpeed: 310, bossHp: 1.3 },
-};
-
-// Settings and best scores are saved in this browser. Private windows can block storage, so every access is guarded.
-const store = {
-  get(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } },
-  set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} },
-};
-const settings = { sound: true, difficulty: 'normal', ...store.get('rewind-settings', {}) };
-if (!DIFFICULTY[settings.difficulty]) settings.difficulty = 'normal';
-const saveSettings = () => store.set('rewind-settings', settings);
-const bestKey = () => `rewind-best-${settings.difficulty}`;
-
-// ---------- Sound: tiny synth beeps and noise bursts, no audio files. ----------
-// Browsers (iPhones especially) only allow sound after a tap or key press, so the audio is created on the first one.
-let audio;
-function unlockAudio() { try { audio ??= new AudioContext(); audio.resume(); } catch {} }
-addEventListener('pointerup', unlockAudio);
-addEventListener('keydown', unlockAudio);
-function beep(freq, ms = 60, vol = 0.05) {
-  if (!audio || !settings.sound) return;
-  try {
-    const o = audio.createOscillator(), g = audio.createGain();
-    o.type = 'square';
-    o.frequency.value = freq;
-    g.gain.setValueAtTime(vol, audio.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + ms / 1000);
-    o.connect(g).connect(audio.destination);
-    o.start();
-    o.stop(audio.currentTime + ms / 1000);
-  } catch {}
-}
-function boom(ms = 120, vol = 0.08) {
-  if (!audio || !settings.sound) return;
-  try {
-    const len = Math.floor(audio.sampleRate * ms / 1000), buf = audio.createBuffer(1, len, audio.sampleRate), d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
-    const src = audio.createBufferSource(), g = audio.createGain();
-    g.gain.value = vol;
-    src.buffer = buf;
-    src.connect(g).connect(audio.destination);
-    src.start();
-  } catch {}
-}
-const jingle = notes => notes.forEach((f, i) => setTimeout(() => beep(f, 90), i * 90));
-
-// ---------- Menus (HTML) ----------
-const $ = id => document.getElementById(id);
-// The whole game is in one of these states; only 'playing' accepts game input.
-const app = { state: 'menu', settingsFrom: 'main' };
-let game;
-const scene = () => game?.scene.getScene('play');
-
-// Show one menu screen (or none, while playing) and put keyboard focus on its main button.
-function showScreen(id) {
-  $('ui').hidden = !id;
-  for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id;
-  if (id) $(id).querySelector('.primary, button')?.focus({ preventScroll: true });
-}
-function updateMainBest() {
-  $('mainBest').textContent = `Best (${DIFFICULTY[settings.difficulty].label}): ${store.get(bestKey(), 0)}`;
-}
-// Restarting the scene wipes every enemy, timer and tween from the last run in one go.
-// sys.resume first: a paused scene must be running again before it restarts.
-function restartScene(play) {
-  scene().sys.resume();
-  scene().scene.restart({ play });
-}
-function toMenu() {
-  app.state = 'menu';
-  restartScene(false);
-  $('pauseBtn').hidden = true;
-  updateMainBest();
-  showScreen('main');
-}
-function startGame() {
-  app.state = 'playing';
-  restartScene(true);
-  showScreen(null);
-  $('pauseBtn').hidden = false;
-  document.activeElement?.blur();
-}
-// sys.pause/resume act immediately; scene.pause/resume wait a frame, which races with menu clicks.
-function pauseGame() {
-  if (app.state !== 'playing') return;
-  app.state = 'paused';
-  scene().sys.pause();
-  $('pauseBtn').hidden = true;
-  showScreen('pause');
-}
-function resumeGame() {
-  scene().sys.resume();
-  app.state = 'playing';
-  showScreen(null);
-  $('pauseBtn').hidden = false;
-  document.activeElement?.blur();
-}
-function openSettings() {
-  // Difficulty is locked mid-game; changing it means starting over, so that's done from the main menu.
-  app.settingsFrom = app.state === 'paused' ? 'pause' : 'main';
-  const locked = app.settingsFrom === 'pause';
-  $('difficulty').disabled = locked;
-  $('difficultyHint').hidden = !locked;
-  showScreen('settings');
-}
-function endGame(won, s) {
-  app.state = won ? 'won' : 'over';
-  $('pauseBtn').hidden = true;
-  const era = ERAS[s.era];
-  $('endTitle').textContent = won ? 'CASE CLOSED' : 'GAME OVER';
-  $('endText').textContent = (won ? 'Officer Vega is back in 1986, time drive fixed.' : `Stranded in ${era.name}, ${era.year}, on stage ${s.stage}.`)
-    + ` Score ${s.score}.` + (s.newBest ? ' New best!' : '');
-  showScreen('end');
-}
-
-$('ui').addEventListener('click', e => {
-  const action = e.target.closest('button')?.dataset.action;
-  if (!action || !scene()) return;
-  if (action === 'play') { app.state = 'story'; showScreen('story'); }
-  else if (action === 'start') startGame();
-  else if (action === 'resume') resumeGame();
-  else if (action === 'menu') toMenu();
-  else if (action === 'settings') openSettings();
-  else if (action === 'back') showScreen(app.settingsFrom);
-});
-$('pauseBtn').addEventListener('click', pauseGame);
-for (const r of document.querySelectorAll('input[name=difficulty]')) {
-  r.checked = r.value === settings.difficulty;
-  r.addEventListener('change', () => { settings.difficulty = r.value; saveSettings(); updateMainBest(); });
-}
-$('sound').checked = settings.sound;
-$('sound').addEventListener('change', e => { settings.sound = e.target.checked; saveSettings(); });
-addEventListener('keydown', e => {
-  if (e.key !== 'Escape' && e.key?.toLowerCase() !== 'p') return;
-  if (app.state === 'playing') pauseGame();
-  else if (app.state === 'paused') resumeGame();
-});
-// Switching apps or tabs mid-game opens the pause menu.
-document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
-
-// Steering listens on the whole page, so a thumb anywhere (even below the game) can move Vega.
-let drag = null;
-addEventListener('pointerdown', e => {
-  if (e.target.closest?.('button, a, label')) return; // taps on menu controls aren't game input
-  drag = { x: e.clientX, y: e.clientY };
-});
-addEventListener('pointermove', e => scene()?.steer(e));
-addEventListener('pointerup', () => { drag = null; });
-addEventListener('pointercancel', () => { drag = null; });
-
-// ---------- The game ----------
-class Play extends Phaser.Scene {
-  constructor() { super('play'); }
-
-  create(data) {
-    this.playing = !!data?.play;
-    if (!this.textures.exists('vega0')) { // textures and animations are shared by every restart, so make them once
-      for (const [key, rows] of Object.entries(ART)) this.textures.generate(key, { data: rows, pixelWidth: PIXEL[key] ?? 4, palette: PAL });
-      makeRoads(this);
-      this.anims.create({ key: 'walk', frames: ['vega1', 'vega0', 'vega2', 'vega0'].map(key => ({ key })), frameRate: 10, repeat: -1 });
-    }
-    this.diff = DIFFICULTY[settings.difficulty];
-    this.t = 0; // game time that stops while paused (update() isn't called then)
-
-    this.cameras.main.setBackgroundColor(0x140a26);
-    this.road = this.add.tileSprite(W / 2, H / 2, W, H, 'road-1986');
-    // Streaks rushing past: only shown during a time jump between timelines.
-    this.streaks = Array.from({ length: 40 }, () => {
-      const s = this.add.image(Phaser.Math.Between(0, W), Phaser.Math.Between(0, H), 'streak').setDepth(4).setVisible(false);
-      s.speed = Phaser.Math.Between(400, 900);
-      return s.setAlpha(Phaser.Math.FloatBetween(0.3, 0.8));
-    });
-
-    // Vega walks the road the whole time; the road scrolling under him is what moves him forward.
-    this.player = this.physics.add.sprite(W / 2, H - 110, 'vega0').setDepth(2).play('walk');
-    this.player.body.setSize(30, 30, false).setOffset(20, 38); // forgiving hitbox: just the shoulders and cap
-    this.sparks = this.add.particles(0, 0, 'spark', {
-      speed: { min: 60, max: 280 }, lifespan: { min: 250, max: 650 }, scale: { start: 1.4, end: 0 },
-      tint: [0xffffff, 0xffd23b, 0xff4fd8, 0x4ff0ff], emitting: false,
-    }).setDepth(3);
-
-    if (!this.playing) return; // main-menu backdrop: Vega walking down a 1986 street
-
-    this.bullets = this.physics.add.group();
-    this.enemyShots = this.physics.add.group();
-    this.enemies = this.physics.add.group();
-    this.pickups = this.physics.add.group();
-    this.physics.add.overlap(this.bullets, this.enemies, (b, e) => this.hitEnemy(b, e));
-    this.physics.add.overlap(this.player, this.enemyShots, (s, shot) => { if (this.hitPlayer()) shot.destroy(); });
-    this.physics.add.overlap(this.player, this.enemies, (s, e) => { if (this.hitPlayer()) this.killEnemy(e, false); });
-    this.physics.add.overlap(this.player, this.pickups, (s, p) => this.collect(p));
-
-    // false = don't swallow these keys, so the menus keep working with the keyboard.
-    this.keys = this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S', false);
-    this.hud = this.add.text(14, 14, '', { fontFamily: FONT, fontSize: '14px', color: '#ffffff', lineSpacing: 8, stroke: '#000000', strokeThickness: 4 }).setDepth(10);
-
-    Object.assign(this, { score: 0, lives: this.diff.lives, gun: 1, parts: 0, best: store.get(bestKey(), 0), newBest: false,
-      nextFire: 0, nextEnemyShot: 0, invulnUntil: 0, waveActive: false, spawnsLeft: 0, divers: false, boss: null, stage: 0, era: 0 });
-    this.startStage(1);
-  }
-
-  setStreaks(on, tint = 0xffffff) {
-    for (const s of this.streaks) s.setVisible(on).setTint(tint);
-  }
-
-  banner(text, ms, size = 22) {
-    this.lastBanner = text;
-    const t = this.add.text(W / 2, H * 0.42, text, {
-      fontFamily: FONT, fontSize: `${size}px`, color: '#ff4fd8', align: 'center', stroke: '#140a26', strokeThickness: 6, lineSpacing: 14,
-    }).setOrigin(0.5).setDepth(10).setAlpha(0);
-    this.tweens.add({ targets: t, alpha: 1, duration: 250, hold: ms - 500, yoyo: true, onComplete: () => t.destroy() });
-  }
-
-  updateHud() {
-    this.hud.setText(`SCORE ${this.score}   STAGE ${this.stage}\nLIVES ${this.lives}  GUN ${this.gun}  DRIVE ${this.parts}/${ERAS.length}`);
-  }
-
-  addScore(n) {
-    this.score += n;
-    if (this.score > this.best) {
-      this.best = this.score;
-      this.newBest = true;
-      store.set(bestKey(), this.best);
-    }
-    this.updateHud();
-  }
-
-  // ----- Stage flow -----
-  // Stage card ("ROME / 44 BC / STAGE 3"), then that stage's enemies or boss. Stage 1 of each timeline starts with a time jump.
-  startStage(n) {
-    this.stage = n;
-    this.era = Math.floor((n - 1) / STAGES_PER_ERA);
-    const s = (n - 1) % STAGES_PER_ERA + 1, era = ERAS[this.era], isBoss = s % 5 === 0;
-    this.updateHud();
-    const card = () => {
-      this.banner(`${era.name.toUpperCase()}\n${era.year}\n\nSTAGE ${n}${isBoss ? '\nBOSS' : ''}`, 2200, 24);
-      this.time.delayedCall(2400, () => (isBoss ? this.spawnBoss(s === STAGES_PER_ERA) : this.spawnStage(s)));
-    };
-    if (s === 1) this.timeJump(era, card); else card();
-  }
-
-  // Between timelines the road fades out, time streaks rush past, and the next timeline's road fades in.
-  timeJump(era, then) {
-    jingle([392, 523, 659, 784, 1046]);
-    this.banner('TIME JUMP!', 1300, 26);
-    this.tweens.add({ targets: this.road, alpha: 0, duration: 300 });
-    this.setStreaks(true, era.lines);
-    this.time.delayedCall(1400, () => {
-      this.road.setTexture(era.road);
-      this.cameras.main.setBackgroundColor(era.bg);
-      this.tweens.add({ targets: this.road, alpha: 1, duration: 300 });
-      this.setStreaks(false);
-      then();
-    });
-  }
-
-  spawnStage(s) {
-    const st = STAGES[s];
-    const nForm = st.formation ? st.formation[0] * st.formation[1] : 0;
-    const nStream = st.stream ? st.stream[0] * st.stream[1] : 0;
-    this.spawned = 0;
-    this.badgeAt = Phaser.Math.Between(0, nForm + nStream - 1); // one enemy per stage carries a gun-upgrade badge
-    this.spawnsLeft = nStream;
-    if (st.formation) this.formation(...st.formation);
-    if (st.stream) this.stream(...st.stream, nForm ? 2500 : 0);
-    this.divers = !!st.divers;
-    this.nextDive = this.t + 2500;
-    this.waveActive = true;
-  }
-
-  spawnEnemy(x, y, props) {
-    const era = ERAS[this.era];
-    const e = this.enemies.create(x, y, era.enemy);
-    return Object.assign(e, { hp: era.hp, badge: this.spawned++ === this.badgeAt }, props);
-  }
-
-  // A grid that flies in, then sways side to side.
-  formation(rows, cols) {
-    const sx = 70, sy = 62, left = W / 2 - (cols - 1) * sx / 2;
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const e = this.spawnEnemy(W / 2, -60, {
-          mode: 'formation', homeX: left + c * sx, homeY: 130 + r * sy, fromX: Phaser.Math.Between(0, W), fromY: -60 - r * 40, enter: 0,
-        });
-        this.tweens.add({ targets: e, enter: 1, delay: (r * cols + c) * 45, duration: 1100, ease: 'Sine.easeOut' });
-      }
-    }
-  }
-
-  // Lines of enemies snaking down the screen; any that get past just leave.
-  stream(lines, per, delay = 0) {
-    for (let s = 0; s < lines; s++) {
-      for (let i = 0; i < per; i++) {
-        this.time.delayedCall(delay + s * 2600 + i * 260, () => {
-          this.spawnEnemy(W / 2, -40, { mode: 'stream', age: 0, side: s % 2 ? -1 : 1, phase: s * 0.9 });
-          this.spawnsLeft--;
-        });
-      }
-    }
-  }
-
-  spawnBoss(main) {
-    const cfg = main ? ERAS[this.era].boss : ERAS[this.era].mid;
-    this.banner(cfg.name, 2200, 26);
-    const b = this.boss = this.physics.add.image(W / 2, -110, cfg.key).setDepth(1);
-    Object.assign(b, { cfg, main, ready: false });
-    b.maxHp = b.hp = Math.round(cfg.hp * this.diff.bossHp);
-    this.tweens.add({ targets: b, y: 180, duration: 2200, ease: 'Sine.easeOut', onComplete: () => { b.ready = true; b.readyAt = this.t; } });
-    this.bossColliders = [
-      this.physics.add.overlap(b, this.bullets, (boss, bullet) => this.hitBoss(bullet)),
-      this.physics.add.overlap(this.player, b, () => this.hitPlayer()),
-    ];
-    this.bossBar = this.add.graphics().setDepth(10);
-    this.nextFan = this.t + 3000;
-    this.nextAim = this.t + 4200;
-  }
-
-  // ----- Shooting -----
-  fire() {
-    if (this.t < this.nextFire) return;
-    this.nextFire = this.t + 150;
-    const spread = [[0], [-1, 1], [-1, 0, 1], [-2, -1, 1, 2], [-2, -1, 0, 1, 2]][this.gun - 1];
-    for (const i of spread) {
-      const a = i * 0.09; // radians off straight up
-      // fired from the pistol's muzzle, just above Vega's hands
-      this.bullets.create(this.player.x + i * 8, this.player.y - 38, 'laser').setVelocity(Math.sin(a) * 720, -Math.cos(a) * 720).setRotation(a);
-    }
-  }
-
-  // Angle is measured from straight down: 0 = down, positive = towards the right.
-  shoot(x, y, tex, speed, angle) {
-    const s = this.enemyShots.create(x, y, tex);
-    s.setVelocity(Math.sin(angle) * speed, Math.cos(angle) * speed).setRotation(-angle);
-  }
-
-  angleToPlayer(x, y) {
-    return Math.atan2(this.player.x - x, this.player.y - y);
-  }
-
-  hitEnemy(b, e) {
-    if (!b.active || !e.active) return;
-    b.destroy();
-    if (--e.hp > 0) {
-      e.setTintFill(0xffffff);
-      this.time.delayedCall(60, () => e.active && e.clearTint());
-      beep(620, 25, 0.03);
-      return;
-    }
-    this.killEnemy(e, true);
-  }
-
-  killEnemy(e, byPlayer) {
-    this.sparks.explode(14, e.x, e.y);
-    boom(90);
-    if (byPlayer) {
-      this.addScore(100 * (this.era + 1));
-      if (e.badge) this.drop('badge', e.x, e.y);
-      else if (Math.random() < 0.12) this.drop('donut', e.x, e.y);
-    }
-    e.destroy();
-  }
-
-  hitBoss(bullet) {
-    const b = this.boss;
-    if (!bullet.active || !b) return;
-    bullet.destroy();
-    if (!b.ready) return; // can't be hurt while arriving
-    b.hp--;
-    b.setTintFill(0xffffff);
-    this.time.delayedCall(40, () => b.active && b.clearTint());
-    if (b.hp <= 0) this.bossDown();
-  }
-
-  bossDown() {
-    const b = this.boss;
-    this.boss = null;
-    this.bossColliders.forEach(c => c.destroy());
-    this.bossBar.destroy();
-    b.disableBody(false, false);
-    this.enemyShots.clear(true, true);
-    this.addScore((b.main ? 5000 : 2500) * (this.era + 1));
-    this.cameras.main.shake(700, 0.015);
-    for (let i = 0; i < 7; i++) {
-      this.time.delayedCall(i * 120, () => {
-        this.sparks.explode(30, b.x + Phaser.Math.Between(-45, 45), b.y + Phaser.Math.Between(-35, 35));
-        boom(220, 0.1);
-      });
-    }
-    this.time.delayedCall(900, () => {
-      if (b.main) this.drop('part', b.x, b.y); // collecting it moves on to the next timeline
-      else { // mid-boss: an extra life and a gun upgrade, then the stage after
-        this.drop('coffee', b.x - 30, b.y);
-        this.drop('badge', b.x + 30, b.y);
-        this.time.delayedCall(2500, () => this.startStage(this.stage + 1));
-      }
-      b.destroy();
-    });
-  }
-
-  drop(type, x, y) {
-    const p = this.pickups.create(x, y, type);
-    p.type = type;
-    if (type === 'badge' || type === 'donut') p.setVelocityY(140); // coffee and parts float to Vega instead
-  }
-
-  collect(p) {
-    const type = p.type;
-    p.destroy();
-    if (type === 'badge') {
-      if (this.gun < 5) { this.gun++; this.banner('GUN UP!', 900, 18); } else this.addScore(1000);
-      jingle([660, 990]);
-    } else if (type === 'donut') {
-      this.addScore(250);
-      beep(1200, 50);
-    } else if (type === 'coffee') {
-      this.lives = Math.min(this.lives + 1, 9);
-      this.banner('COFFEE BREAK!\n1UP', 1200, 18);
-      jingle([523, 784, 1046]);
-    } else if (type === 'part') {
-      this.parts++;
-      this.addScore(2000);
-      jingle([523, 659, 784, 1046]);
-      this.banner(`GOT THE\n${ERAS[this.era].part}!\n\nTIME DRIVE ${this.parts}/${ERAS.length}`, 2800);
-      const last = this.stage === ERAS.length * STAGES_PER_ERA;
-      this.time.delayedCall(3100, () => (last ? this.victory() : this.startStage(this.stage + 1)));
-    }
-    this.updateHud();
-  }
-
-  // Returns true if the hit counted (false while blinking after a respawn).
-  hitPlayer() {
-    if (!this.player.active || this.t < this.invulnUntil) return false;
-    this.sparks.explode(40, this.player.x, this.player.y);
-    boom(450, 0.12);
-    this.cameras.main.shake(260, 0.012);
-    this.lives--;
-    this.gun = Math.max(1, this.gun - 1);
-    this.player.disableBody(true, true);
-    this.updateHud();
-    if (this.lives <= 0) {
-      this.time.delayedCall(1300, () => endGame(false, this));
-      return true;
-    }
-    this.time.delayedCall(1000, () => {
-      this.player.enableBody(true, W / 2, H - 110, true, true);
-      this.invulnUntil = this.t + 2200;
-      this.tweens.add({ targets: this.player, alpha: 0.25, duration: 130, yoyo: true, repeat: 7, onComplete: () => this.player.setAlpha(1) });
-    });
-    return true;
-  }
-
-  // The drive is fixed: one last time jump home to 1986, and Vega walks off up the street.
-  victory() {
-    this.invulnUntil = Infinity;
-    this.banner('TIME DRIVE\nFIXED!', 1600, 26);
-    this.time.delayedCall(1700, () => {
-      jingle([392, 523, 659, 784, 1046]);
-      this.tweens.add({ targets: this.road, alpha: 0, duration: 300 });
-      this.setStreaks(true, 0xff4fd8);
-    });
-    this.time.delayedCall(3100, () => {
-      this.road.setTexture('road-1986');
-      this.cameras.main.setBackgroundColor(0x140a26);
-      this.tweens.add({ targets: this.road, alpha: 1, duration: 300 });
-      this.setStreaks(false);
-      this.banner('NEON CITY\n1986', 1800, 28);
-      this.tweens.add({ targets: this.player, y: -120, delay: 600, duration: 2200 });
-    });
-    this.time.delayedCall(5600, () => endGame(true, this));
-  }
-
-  // ----- Controls -----
-  // Mouse: Vega goes where the pointer is. Touch: Vega moves by however far the finger drags,
-  // so the finger never has to cover the character.
-  steer(e) {
-    if (app.state !== 'playing' || !this.playing || !this.player?.active) return;
-    const r = this.game.canvas.getBoundingClientRect(), k = W / r.width;
-    if (e.pointerType === 'mouse') {
-      this.placePlayer((e.clientX - r.left) * k, (e.clientY - r.top) * k);
-    } else if (drag) {
-      this.placePlayer(this.player.x + (e.clientX - drag.x) * k * 1.4, this.player.y + (e.clientY - drag.y) * k * 1.4);
-      drag.x = e.clientX;
-      drag.y = e.clientY;
-    }
-  }
-
-  placePlayer(x, y) {
-    this.player.setPosition(Phaser.Math.Clamp(x, 35, W - 35), Phaser.Math.Clamp(y, H * 0.5, H - 44));
-  }
-
-  // ----- Every frame -----
-  update(_, delta) {
-    const dt = delta / 1000;
-    this.road.tilePositionY -= ROAD_SPEED * dt;
-    for (const s of this.streaks) {
-      s.y += s.speed * dt;
-      if (s.y > H + 20) { s.y = -20; s.x = Phaser.Math.Between(0, W); }
-    }
-    if (!this.playing) return;
-    this.t += delta;
-
-    if (this.player.active && app.state === 'playing') {
-      const k = this.keys, speed = 0.45 * delta;
-      const dx = (k.RIGHT.isDown || k.D.isDown) - (k.LEFT.isDown || k.A.isDown);
-      const dy = (k.DOWN.isDown || k.S.isDown) - (k.UP.isDown || k.W.isDown);
-      if (dx || dy) this.placePlayer(this.player.x + dx * speed, this.player.y + dy * speed);
-      this.fire();
-    }
-
-    this.updateEnemies(dt);
-    this.updateBoss();
-
-    for (const p of this.pickups.getChildren()) {
-      if ((p.type === 'part' || p.type === 'coffee') && this.player.active) this.physics.moveToObject(p, this.player, 280);
-    }
-    for (const g of [this.bullets, this.enemyShots, this.pickups]) {
-      for (const o of g.getChildren().slice()) if (o.y < -50 || o.y > H + 50 || o.x < -50 || o.x > W + 50) o.destroy();
-    }
-
-    if (this.waveActive && this.spawnsLeft === 0 && this.enemies.countActive() === 0) {
-      this.waveActive = false;
-      this.time.delayedCall(1000, () => this.startStage(this.stage + 1));
-    }
-  }
-
-  updateEnemies(dt) {
-    const sway = Math.sin(this.t / 900) * 50, bob = Math.sin(this.t / 400) * 6;
-    for (const e of this.enemies.getChildren().slice()) {
-      if (e.mode === 'formation') {
-        e.x = Phaser.Math.Linear(e.fromX, e.homeX + sway, e.enter);
-        e.y = Phaser.Math.Linear(e.fromY, e.homeY + bob, e.enter);
-      } else if (e.mode === 'stream') {
-        e.age += dt;
-        e.y = -40 + e.age * 150;
-        e.x = W / 2 + e.side * Math.sin(e.age * 1.6 + e.phase) * W * 0.36;
-        if (e.y > H + 40) e.destroy();
-      } else if (e.mode === 'dive') {
-        e.x += e.vx * dt;
-        e.y += e.vy * dt;
-        if (e.y > H + 40) { // walked past: come back in from the top to its old spot
-          Object.assign(e, { mode: 'formation', fromX: e.homeX, fromY: -60, enter: 0 });
-          this.tweens.add({ targets: e, enter: 1, duration: 1200, ease: 'Sine.easeOut' });
-        }
-      }
-    }
-
-    if (this.divers && this.t > this.nextDive) {
-      this.nextDive = this.t + 1500 / this.diff.fire;
-      const e = Phaser.Utils.Array.GetRandom(this.enemies.getChildren().filter(x => x.mode === 'formation' && x.enter === 1));
-      if (e && this.player.active) {
-        Object.assign(e, { mode: 'dive', vx: (this.player.x - e.x) * 0.45, vy: 300 });
-        beep(280, 90, 0.03);
-      }
-    }
-
-    if (this.t > this.nextEnemyShot) {
-      // fire gets faster with each timeline and with each stage inside it
-      const pressure = (1 + 0.2 * this.era + 0.04 * ((this.stage - 1) % STAGES_PER_ERA)) * this.diff.fire;
-      const shooters = this.enemies.getChildren().filter(x => x.y > 0 && x.y < H * 0.7);
-      this.nextEnemyShot = this.t + (shooters.length ? 1000 : 300) / pressure;
-      const e = Phaser.Utils.Array.GetRandom(shooters);
-      if (e) this.shoot(e.x, e.y + 20, ERAS[this.era].shot, this.diff.shotSpeed, Phaser.Math.Clamp(this.angleToPlayer(e.x, e.y) * 0.5, -0.5, 0.5));
-    }
-  }
-
-  updateBoss() {
-    const b = this.boss;
-    if (!b) return;
-    const bw = W - 120;
-    this.bossBar.clear().fillStyle(0x000000, 0.6).fillRect(60, 64, bw, 12).fillStyle(0xff4fd8).fillRect(60, 64, bw * b.hp / b.maxHp, 12);
-    if (!b.ready) return;
-
-    b.x = W / 2 + Math.sin((this.t - b.readyAt) / 1300) * (W / 2 - 90);
-    const rage = b.hp < b.maxHp / 2 ? 0.65 : 1; // attacks come faster below half health
-    const speed = this.diff.shotSpeed / 250, shot = b.cfg.shot;
-    if (this.t > this.nextFan) {
-      this.nextFan = this.t + 1800 * rage / this.diff.fire;
-      const n = b.main && rage < 1 ? 7 : 5;
-      for (let i = 0; i < n; i++) this.shoot(b.x, b.y + 40, shot, 220 * speed, -0.7 + 1.4 * i / (n - 1));
-      beep(180, 120, 0.04);
-    }
-    if (this.t > this.nextAim) {
-      this.nextAim = this.t + 2600 * rage / this.diff.fire;
-      for (let i = 0; i < 3; i++) {
-        this.time.delayedCall(i * 150, () => {
-          if (this.boss && this.player.active) this.shoot(b.x, b.y + 40, shot, 320 * speed, this.angleToPlayer(b.x, b.y));
-        });
-      }
-    }
-  }
-}
-
-updateMainBest();
-// Phaser draws text once, so wait (briefly) for the arcade font before starting the game.
-Promise.race([document.fonts?.load(`16px ${FONT}`), new Promise(r => setTimeout(r, 2000))]).finally(() => {
-  game = new Phaser.Game({
-    type: Phaser.AUTO,
-    width: W,
-    height: H,
-    backgroundColor: '#140a26',
-    pixelArt: true,
-    physics: { default: 'arcade' },
-    scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-    scene: Play,
-  });
-});
-</script>
+<script src="js/data.js"></script>
+<script src="js/art.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/game.js"></script>
 </body>
 </html>

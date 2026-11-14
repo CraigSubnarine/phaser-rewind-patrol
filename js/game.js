@@ -3,12 +3,21 @@
 class Play extends Phaser.Scene {
   constructor() { super('play'); }
 
+  // Your own sprites: any PNG listed in assets/sprites/list.js replaces the built-in sprite of the same name.
+  preload() {
+    for (const key of CUSTOM_SPRITES) if (!this.textures.exists(key)) this.load.image(key, `assets/sprites/${key}.png`);
+  }
+
   create(data) {
     this.playing = !!data?.play;
-    if (!this.textures.exists('vega0')) { // textures and animations are shared by every restart, so make them once
-      for (const [key, rows] of Object.entries(ART)) this.textures.generate(key, { data: rows, pixelWidth: PIXEL[key] ?? 4, palette: PAL });
-      makeRoads(this);
-      makeSides(this);
+    // Textures and animations are shared by every restart, so they're made once. Only the sprites you haven't
+    // supplied yourself are generated.
+    for (const [key, rows] of Object.entries(ART)) {
+      if (!this.textures.exists(key)) this.textures.generate(key, { data: rows, pixelWidth: PIXEL[key] ?? 4, palette: PAL });
+    }
+    makeRoads(this);
+    makeSides(this);
+    if (!this.anims.exists('walk')) {
       this.anims.create({ key: 'walk', frames: ['vega1', 'vega0', 'vega2', 'vega0'].map(key => ({ key })), frameRate: 10, repeat: -1 });
       for (const era of ERAS) for (const k of [`ride-${era.id}-f`, `ride-${era.id}-b`, `rideE-${era.id}-f`, `rideE-${era.id}-b`]) {
         this.anims.create({ key: k, frames: [{ key: `${k}0` }, { key: `${k}1` }], frameRate: 6, repeat: -1 });
@@ -33,7 +42,7 @@ class Play extends Phaser.Scene {
 
     // Vega walks the road the whole time; the road scrolling under him is what moves him forward.
     this.player = this.physics.add.sprite(W / 2, H - 110, 'vega0').setDepth(2).play('walk');
-    this.player.body.setSize(30, 30, false).setOffset(20, 38); // forgiving hitbox: just the shoulders and cap
+    this.footHitbox();
     this.sparks = this.add.particles(0, 0, 'spark', {
       speed: { min: 60, max: 280 }, lifespan: { min: 250, max: 650 }, scale: { start: 1.4, end: 0 },
       tint: [0xffffff, 0xffd23b, 0xff4fd8, 0x4ff0ff], emitting: false,
@@ -74,6 +83,7 @@ class Play extends Phaser.Scene {
       target: { x: this.player.x, y: this.player.y },
       charge: 0, frozenUntil: 0, testudoUntil: 0, streamTimers: [], sideMode: null, nextObstacle: 0,
       nextAxe: 0, nextBoomerang: 0, orbitAngle: 0, chargeLockUntil: 0, endless: false,
+      bonus: null, nextRider: 0, hudSecs: 0, // bonus levels
       et: 0, // enemy clock: like t, but it stops while the Siren has enemies frozen
     });
     this.refreshStats();
@@ -134,8 +144,9 @@ class Play extends Phaser.Scene {
     const item = this.P?.active;
     if (!item || app.state !== 'playing' || !this.player.active || this.charge < this.chargeNeeded()) return false;
     const P = this.P, effect = item.active.effect;
-    if (effect === 'skip' && (this.isBossStage() || !this.waveActive)) {
-      this.toast(this.isBossStage() ? 'NOT ON BOSS STAGES' : 'NOTHING TO SKIP', this.player.x, this.player.y - 60, '#ff4fd8');
+    if (effect === 'skip' && (this.isBossStage() || this.bonus || !this.waveActive)) {
+      const why = this.bonus ? 'NOT IN BONUS LEVELS' : this.isBossStage() ? 'NOT ON BOSS WAVES' : 'NOTHING TO SKIP';
+      this.toast(why, this.player.x, this.player.y - 60, '#ff4fd8');
       return false;
     }
     if (effect === 'clear') { // Air Support: everything on screen goes, bosses take a big hit
@@ -145,14 +156,14 @@ class Play extends Phaser.Scene {
       for (const e of this.enemies.getChildren().slice()) if (e.y > -20) this.killEnemy(e, true);
       this.enemyShots.clear(true, true);
       if (this.boss?.ready) this.damage(this.boss, 30 * this.dmgNow(), true);
-    } else if (effect === 'skip') { // VCR Remote: the stage is over
+    } else if (effect === 'skip') { // VCR Remote: this wave is over, on to the next
       this.banner('FAST FORWARD >>', 1200, 24);
       jingle([1046, 1318, 1568]);
       this.streamTimers.forEach(t => t.remove());
       this.spawnsLeft = 0;
       for (const e of this.enemies.getChildren().slice()) { this.sparks.explode(8, e.x, e.y); e.destroy(); }
       this.enemyShots.clear(true, true);
-      this.stageCleared();
+      this.waveCleared();
     } else if (effect === 'freeze') { // Siren: enemies stop, their shots vanish
       this.banner('SIREN!', 1000, 26);
       jingle([880, 660, 880, 660]);
@@ -271,7 +282,9 @@ class Play extends Phaser.Scene {
   updateHud() {
     const shield = this.shield ? `+${this.shield}` : '';
     const drive = this.endless ? 'ENDLESS' : `DRIVE ${this.parts}/${TIMELINES}`;
-    this.hud.setText(`SCORE ${this.score}   STAGE ${this.stage}\nHP ${this.hp}/${this.P.maxHp}${shield}  $${Math.floor(this.coins)}  ${drive}`);
+    const b = this.bonus, secs = b && Math.ceil(Math.max(0, Math.min(BONUS_TIME, b.endsAt - this.t)) / 1000);
+    const where = b ? `BONUS ${secs}s  CAUGHT ${b.caught}` : `WAVE ${this.stage}`;
+    this.hud.setText(`SCORE ${this.score}   ${where}\nHP ${this.hp}/${this.P.maxHp}${shield}  $${Math.floor(this.coins)}  ${drive}`);
   }
 
   addScore(n) {
@@ -289,8 +302,10 @@ class Play extends Phaser.Scene {
     this.updateHud();
   }
 
-  // ----- Stage flow -----
-  // Stage card ("ROME / 44 BC / STAGE 3"), then that stage's enemies or boss. Stage 1 of each timeline starts with a time jump.
+  // ----- Run flow -----
+  // Waves come in levels of 5, played back to back: a level card at the start, a quick "WAVE n" call between waves,
+  // and the 5th wave is a boss. After every level comes a bonus vehicle level (a chase after the mid-boss, an escape
+  // after the timeline boss), then the shop. (`this.stage` is the wave number, 1-50 and on into endless.)
   // Timeline number n of this run (0-based): one of the 5 the seed picked, then in endless a seeded pick every
   // 10 stages, never the same one twice in a row.
   eraFor(n) {
@@ -314,15 +329,24 @@ class Play extends Phaser.Scene {
     this.stage = n;
     this.era = Math.floor((n - 1) / STAGES_PER_ERA);
     this.E = this.eraFor(this.era);
-    const s = (n - 1) % STAGES_PER_ERA + 1, era = this.E, isBoss = s % 5 === 0, vehicle = STAGES[s]?.vehicle;
+    const s = (n - 1) % STAGES_PER_ERA + 1, era = this.E, isBoss = s % 5 === 0;
     this.updateHud();
-    const extra = isBoss ? '\nBOSS' : vehicle === 'chase' ? '\nCHASE!\nSHOOT AHEAD' : vehicle === 'escape' ? '\nESCAPE!\nSHOOT BEHIND' : '';
-    const card = () => {
-      this.setView(vehicle ? 'side' : 'top', vehicle);
-      this.banner(`${era.name.toUpperCase()}\n${era.year}\n\nSTAGE ${n}${extra}`, 2200, 24);
-      this.time.delayedCall(2400, () => (isBoss ? this.spawnBoss(s === STAGES_PER_ERA) : this.spawnStage(s)));
+    const go = () => (isBoss ? this.spawnBoss(s === STAGES_PER_ERA) : this.spawnStage(s));
+    if ((n - 1) % 5 !== 0) { // mid-level: keep the action going
+      this.banner(isBoss ? `WAVE ${n}\nBOSS` : `WAVE ${n}`, 1100, 22);
+      this.time.delayedCall(isBoss ? 1300 : 900, go);
+      return;
+    }
+    const card = () => { // a new level: the timeline card
+      this.setView('top');
+      this.banner(`${era.name.toUpperCase()}\n${era.year}\n\nLEVEL ${Math.ceil(n / 5)}\nWAVES ${n}-${n + 4}`, 2200, 24);
+      this.time.delayedCall(2400, go);
     };
     if (s === 1) this.timeJump(era, card); else card();
+  }
+
+  isBonus() {
+    return !!this.bonus;
   }
 
   // Swap between walking the road (top-down) and a vehicle stage (side view, chasing or being chased).
@@ -347,7 +371,7 @@ class Play extends Phaser.Scene {
     } else {
       this.aim = -Math.PI / 2;
       this.player.play('walk');
-      this.player.body.setSize(30, 30, false).setOffset(20, 38);
+      this.footHitbox();
       this.placePlayer(W / 2, H - 110);
     }
   }
@@ -367,10 +391,16 @@ class Play extends Phaser.Scene {
     });
   }
 
-  // Stage done: a coin bonus, every coin left on the road flies to Vega, then the shop.
-  stageCleared() {
+  // A wave is done: a few coins, and straight on to the next wave of the level.
+  waveCleared() {
     this.waveActive = false;
-    this.addCoins(3 + 2 * this.era);
+    this.addCoins(2 + this.era);
+    this.time.delayedCall(800, () => { if (this.hp > 0) this.startStage(this.stage + 1); });
+  }
+
+  // A level is done (its boss is down): every coin left flies to Vega, then the bonus vehicle level.
+  levelCleared() {
+    this.waveActive = false;
     if (this.P.regen && this.hp > 0) this.hp = Math.min(this.hp + this.P.regen, this.P.maxHp); // Hearth Fire
     if (this.P.stageShield) this.shield = this.P.shieldMax; // Shield Maiden
     this.vacuum = true;
@@ -379,8 +409,7 @@ class Play extends Phaser.Scene {
       for (const p of this.pickups.getChildren().slice()) this.collect(p);
       this.vacuum = false;
       this.enemyShots.clear(true, true);
-      this.obstacles.clear(true, true);
-      openShop(this);
+      this.startBonus(this.stage % STAGES_PER_ERA === 0 ? 'escape' : 'chase');
     });
   }
 
@@ -388,9 +417,37 @@ class Play extends Phaser.Scene {
     this.startStage(this.stage + 1);
   }
 
+  // Bonus level: a longer vehicle stage between levels, seen from the side. Riders keep coming for BONUS_TIME and
+  // each one taken down pays out at the end. Hits can't cost HP here, only coins.
+  startBonus(mode) {
+    this.bonus = { mode, caught: 0, endsAt: Infinity };
+    this.updateHud();
+    this.setView('side', mode);
+    this.banner(`BONUS LEVEL\n\n${mode === 'chase' ? 'CHASE THEM DOWN!\nSHOOT AHEAD' : 'ESCAPE!\nSHOOT BEHIND'}`, 2200, 22);
+    this.time.delayedCall(2400, () => {
+      this.bonus.endsAt = this.t + BONUS_TIME;
+      this.nextRider = this.t;
+      this.nextDive = this.t + 3000;
+      this.nextObstacle = this.t + 1500;
+    });
+  }
+
+  endBonus() {
+    const b = this.bonus;
+    this.bonus = null;
+    for (const e of this.enemies.getChildren().slice()) { this.sparks.explode(8, e.x, e.y); e.destroy(); } // the rest peel away
+    for (const p of this.pickups.getChildren().slice()) this.collect(p); // coins still on the road are yours
+    this.enemyShots.clear(true, true);
+    this.obstacles.clear(true, true);
+    const pay = b.caught * (2 + this.era);
+    this.addCoins(pay);
+    jingle([523, 659, 784, 1046, 1318]);
+    this.banner(`BONUS COMPLETE\n\n${b.caught} RIDERS\n+$${Math.floor(pay * this.P.coinMult)}`, 2400, 22);
+    this.time.delayedCall(2600, () => (this.stage === FINAL_STAGE && !this.endless ? openChoice(this) : openShop(this)));
+  }
+
   spawnStage(s) {
     const st = STAGES[s];
-    if (st.vehicle) return this.spawnRiders(st.riders + 2 * this.era, st.vehicle);
     const nForm = st.formation ? st.formation[0] * st.formation[1] : 0;
     const nStream = st.stream ? st.stream[0] * st.stream[1] : 0;
     this.spawnsLeft = nStream;
@@ -432,29 +489,17 @@ class Play extends Phaser.Scene {
     }
   }
 
-  // Vehicle stage: riders arrive in groups of four, from ahead in a chase (they look back to shoot at you)
-  // or from behind in an escape. They weave about and now and then try to ram you.
-  spawnRiders(n, mode) {
-    const era = this.E, chase = mode === 'chase';
-    this.spawnsLeft = n;
-    this.streamTimers = [];
-    for (let i = 0; i < n; i++) {
-      this.streamTimers.push(this.time.delayedCall(i * 900 + Math.floor(i / 4) * 2600, () => {
-        const y = Phaser.Math.Between(BAND_TOP + 20, H - 50), x0 = chase ? W + 70 : -70;
-        const e = this.spawnEnemy(x0, y, {
-          mode: 'ride', fromX: x0, homeX: chase ? Phaser.Math.Between(330, W - 60) : Phaser.Math.Between(60, 270), baseY: y, phase: Math.random() * 6, enter: 0,
-        });
-        e.hp += 1; // riders are tougher than foot soldiers
-        e.play(`rideE-${era.id}-${chase ? 'b' : 'f'}`);
-        e.body.setSize(e.width * 0.6, e.height * 0.55, true);
-        this.tweens.add({ targets: e, enter: 1, duration: 1400, ease: 'Sine.easeOut' });
-        this.spawnsLeft--;
-      }));
-    }
-    this.divers = false; // riders ram instead (see updateEnemies)
-    this.nextDive = this.t + 3000;
-    this.nextObstacle = this.t + 1500;
-    this.waveActive = true;
+  // One rider in a bonus level: from ahead in a chase (they look back to shoot at you) or from behind in an escape.
+  // They weave about and now and then try to ram you.
+  spawnRider(mode) {
+    const chase = mode === 'chase', y = Phaser.Math.Between(BAND_TOP + 20, H - 50), x0 = chase ? W + 70 : -70;
+    const e = this.spawnEnemy(x0, y, {
+      mode: 'ride', fromX: x0, homeX: chase ? Phaser.Math.Between(330, W - 60) : Phaser.Math.Between(60, 270), baseY: y, phase: Math.random() * 6, enter: 0,
+    });
+    e.hp += 1; // riders are tougher than foot soldiers
+    e.play(`rideE-${this.E.id}-${chase ? 'b' : 'f'}`);
+    e.body.setSize(e.width * 0.6, e.height * 0.55, true);
+    this.tweens.add({ targets: e, enter: 1, duration: 1400, ease: 'Sine.easeOut' });
   }
 
   spawnBoss(main) {
@@ -486,11 +531,18 @@ class Play extends Phaser.Scene {
     return this.P.fireDelay * Math.max(0.35, 1 - this.P.berserk * (this.P.maxHp - this.hp));
   }
 
+  // On foot, a forgiving hitbox: just Vega's shoulders and cap. Sized from the sprite, so your own art works too.
+  footHitbox() {
+    const p = this.player;
+    p.body.setSize(p.width * 0.43, p.height * 0.375, false).setOffset(p.width * 0.285, p.height * 0.475);
+  }
+
   // Where shots leave from: the pistol's muzzle (above Vega on foot; ahead of or behind his ride in a vehicle).
   muzzle() {
+    const p = this.player;
     return this.view === 'side'
-      ? { x: this.player.x + Math.cos(this.aim) * 44, y: this.player.y - 8 }
-      : { x: this.player.x, y: this.player.y - 38 };
+      ? { x: p.x + Math.cos(this.aim) * p.width * 0.45, y: p.y - p.height * 0.1 }
+      : { x: p.x, y: p.y - p.height * 0.475 };
   }
 
   fire() {
@@ -612,6 +664,7 @@ class Play extends Phaser.Scene {
     this.sparks.explode(14, e.x, e.y);
     boom(90);
     if (byPlayer) {
+      if (this.bonus) this.bonus.caught++;
       this.addScore(100 * (this.era + 1));
       this.addCharge(1);
       if (this.P.dynamite) { // Dynamite: it blows up a moment later, maybe taking its neighbours with it
@@ -645,7 +698,7 @@ class Play extends Phaser.Scene {
       if (b.main && !this.endless) this.drop('part', b.x, b.y); // collecting it leads on to the shop and the next timeline
       else { // mid-boss (or any boss in endless): coffee for a full heal, then the shop
         this.drop('coffee', b.x, b.y);
-        this.time.delayedCall(2200, () => this.stageCleared());
+        this.time.delayedCall(2200, () => this.levelCleared());
       }
       b.destroy();
     });
@@ -686,8 +739,8 @@ class Play extends Phaser.Scene {
       this.addScore(2000);
       jingle([523, 659, 784, 1046]);
       this.banner(`GOT THE\n${this.E.part}!\n\nTIME DRIVE ${this.parts}/${TIMELINES}`, 2800);
-      // After the 5th part: go home, or keep going in endless.
-      this.time.delayedCall(3100, () => (this.stage === FINAL_STAGE ? openChoice(this) : this.stageCleared()));
+      // Then the escape bonus level: flee with the part (after the 5th part, the go-home-or-endless choice follows it).
+      this.time.delayedCall(3100, () => this.levelCleared());
     }
     this.updateHud();
   }
@@ -709,6 +762,17 @@ class Play extends Phaser.Scene {
       beep(700, 60);
       return true;
     }
+    if (this.bonus) { // bonus levels can't cost HP: you drop some coins instead
+      const lost = Math.min(Math.floor(this.coins), 3 + this.era);
+      this.coins -= lost;
+      this.invulnUntil = this.t + 1000;
+      this.toast(lost ? `-$${lost}` : 'OOF', this.player.x, this.player.y - 50, '#ffd23b');
+      this.cameras.main.shake(200, 0.008);
+      boom(200, 0.08);
+      this.tweens.add({ targets: this.player, alpha: 0.25, duration: 120, yoyo: true, repeat: 3, onComplete: () => this.player.setAlpha(1) });
+      this.updateHud();
+      return true;
+    }
     this.hp--;
     this.sparks.explode(30, this.player.x, this.player.y);
     boom(450, 0.12);
@@ -728,6 +792,7 @@ class Play extends Phaser.Scene {
 
   // The drive is fixed: one last time jump home to 1986, and Vega walks off up the street.
   victory() {
+    this.setView('top'); // back on foot after the last bonus level
     this.invulnUntil = Infinity;
     this.banner('TIME DRIVE\nFIXED!', 1600, 26);
     this.time.delayedCall(1700, () => {
@@ -883,7 +948,16 @@ class Play extends Phaser.Scene {
       for (const o of g.getChildren().slice()) if (o.y < -50 || o.y > H + 50 || o.x < -80 || o.x > W + 80) o.destroy();
     }
 
-    if (this.waveActive && this.spawnsLeft === 0 && this.enemies.countActive() === 0) this.stageCleared();
+    if (this.waveActive && this.spawnsLeft === 0 && this.enemies.countActive() === 0) this.waveCleared();
+
+    // Bonus level: riders keep coming until the clock runs out (at most 6 on the road at once).
+    const b = this.bonus;
+    if (b && this.t < b.endsAt && this.t > this.nextRider && this.enemies.countActive() < 6) {
+      this.nextRider = this.t + 1300 / ((1 + 0.2 * this.era) * this.diff.fire);
+      this.spawnRider(b.mode);
+    }
+    if (b && this.t >= b.endsAt) this.endBonus();
+    else if (b && Math.ceil((b.endsAt - this.t) / 1000) !== this.hudSecs) { this.hudSecs = Math.ceil((b.endsAt - this.t) / 1000); this.updateHud(); }
   }
 
   updateEnemies(dt) {
@@ -928,7 +1002,8 @@ class Play extends Phaser.Scene {
         beep(280, 90, 0.03);
       }
     }
-    if (side && this.waveActive && this.t > this.nextDive) { // a rider tries to ram Vega
+    const racing = side && this.bonus && this.t < this.bonus.endsAt;
+    if (racing && this.t > this.nextDive) { // a rider tries to ram Vega
       this.nextDive = this.t + 2600 / pressure;
       const e = Phaser.Utils.Array.GetRandom(this.enemies.getChildren().filter(x => x.mode === 'ride' && x.enter === 1));
       if (e && this.player.active) {
@@ -936,7 +1011,7 @@ class Play extends Phaser.Scene {
         beep(220, 120, 0.04);
       }
     }
-    if (side && this.waveActive && this.t > this.nextObstacle) { // rocks or barrels come at you from ahead
+    if (racing && this.t > this.nextObstacle) { // rocks or barrels come at you from ahead
       this.nextObstacle = this.t + Phaser.Math.Between(1100, 2000) / pressure;
       this.obstacles.create(W + 50, Phaser.Math.Between(BAND_TOP + 10, H - 40), this.E.obstacle).setVelocityX(-GROUND_SPEED).setDepth(1);
     }

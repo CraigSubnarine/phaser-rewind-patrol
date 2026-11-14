@@ -6,8 +6,10 @@ const W = 600, H = 900;
 const FONT = '"Press Start 2P", monospace';
 const ROAD_SPEED = 90; // pixels per second the road slides past: Vega is always walking forward
 const STAGES_PER_ERA = 10;
-// Vehicle stages are seen from the side: sky and hills on top, the ground band below where everything races right.
+// Bonus levels (vehicle chases between levels) are seen from the side: sky and hills on top, the ground band below
+// where everything races right.
 const GROUND_Y = 430, BAND_TOP = 470, GROUND_SPEED = 300;
+const BONUS_TIME = 45000; // how long a bonus level lasts, in ms
 
 // Seven timelines. Each run's seed picks 5 of them, in a random order, for stages 1-50 (10 stages each). Stage 5 of
 // each has a mid-boss, stage 10 the timeline's boss, who holds one of the missing time-drive parts. Every stage opens
@@ -47,17 +49,17 @@ const ERAS = [
 ];
 const ERA = Object.fromEntries(ERAS.map(e => [e.id, e]));
 
-// What each non-boss stage of a timeline throws at you: a formation [rows, cols] that flies in and sways,
-// snaking lines [lines, per line], and/or dive-bombers peeling off the formation. It gets busier towards the boss.
-// Stages 3 and 8 are side-view vehicle stages: a chase (you shoot ahead) and an escape (you're chased and shoot back).
+// What each non-boss wave of a timeline throws at you: a formation [rows, cols] that flies in and sways,
+// snaking lines [lines, per line], and/or dive-bombers peeling off the formation. It gets busier towards each boss
+// (waves 5 and 10).
 const STAGES = {
   1: { formation: [3, 6] },
   2: { stream: [2, 8] },
-  3: { vehicle: 'chase', riders: 10 },
-  4: { formation: [4, 7], divers: true },
+  3: { formation: [4, 7] },
+  4: { formation: [3, 7], stream: [1, 8], divers: true },
   6: { stream: [3, 8] },
   7: { formation: [5, 7] },
-  8: { vehicle: 'escape', riders: 12 },
+  8: { formation: [4, 7], divers: true },
   9: { formation: [3, 7], stream: [2, 6], divers: true },
 };
 
@@ -88,7 +90,7 @@ const UPGRADES = [
   { id: 'airsupport', name: 'Air Support Radio', active: { charge: 40, effect: 'clear' }, price: 20, max: 1,
     desc: 'Active, charges with 40 kills: an air strike wipes out every enemy on screen. Bosses take a big hit.' },
   { id: 'remote', name: 'VCR Remote', active: { charge: 60, effect: 'skip' }, price: 24, max: 1,
-    desc: 'Active, charges with 60 kills: fast-forward. The stage counts as cleared and you go to the shop. Not on boss stages.' },
+    desc: 'Active, charges with 60 kills: fast-forward past the current wave. Not on boss waves or bonus levels.' },
   { id: 'siren', name: 'Police Siren', active: { charge: 25, effect: 'freeze' }, price: 14, max: 1,
     desc: 'Active, charges with 25 kills: enemies freeze and their shots vanish for 5 s.' },
   { id: 'testudo', era: 'rome', name: 'Testudo', active: { charge: 30, effect: 'invuln' }, price: 16, max: 1,
@@ -133,7 +135,7 @@ const UPGRADES = [
 
   { id: 'axes', era: 'norse', name: 'Throwing Axes', desc: 'Throw a spinning axe that cuts through everything, every 1.5 s (faster with each copy).', price: 16, max: 2, apply: p => { p.axes += 1; } },
   { id: 'berserk', era: 'norse', name: 'Berserker Rage', desc: 'Fire 15% faster for every HP you are missing.', price: 12, max: 1, apply: p => { p.berserk = 0.15; } },
-  { id: 'hearth', era: 'norse', name: 'Hearth Fire', desc: 'Heal 1 HP every time you clear a stage.', price: 16, max: 1, apply: p => { p.regen = 1; } },
+  { id: 'hearth', era: 'norse', name: 'Hearth Fire', desc: 'Heal 2 HP every time you finish a level.', price: 16, max: 1, apply: p => { p.regen = 2; } },
   { id: 'thunder', era: 'norse', name: 'Thunder Hammer', active: { charge: 30, effect: 'thunder' }, price: 18, max: 1,
     desc: 'Active, charges with 30 kills: 10 lightning bolts strike your enemies (and bosses).' },
 
@@ -167,7 +169,7 @@ const COMBOS = [
   { id: 'laststand', name: 'Last Stand', needs: ['bushido', 'berserk'], desc: 'On your last HP, damage and fire rate double again.', apply: p => { p.lowHpDmg += 1; p.berserk = 0.3; } },
   { id: 'returnaxe', name: 'Returning Axes', needs: ['axes', 'boomerang'], desc: 'Throwing axes come back like boomerangs.', apply: p => { p.axesReturn = true; } },
   { id: 'megastampede', name: 'Mammoth Stampede', needs: ['stampede', 'hide'], desc: 'Stampede deals double damage.', apply: p => { p.stampedeMult = 2; } },
-  { id: 'shieldmaiden', name: 'Shield Maiden', needs: ['hearth', 'scutum'], desc: 'Clearing a stage also refills your shield.', apply: p => { p.stageShield = true; } },
+  { id: 'shieldmaiden', name: 'Shield Maiden', needs: ['hearth', 'scutum'], desc: 'Finishing a level also refills your shield.', apply: p => { p.stageShield = true; } },
 ];
 
 // Vega's stats from the upgrades owned ({ id: copies }). Combos apply after every upgrade, so they can scale them.

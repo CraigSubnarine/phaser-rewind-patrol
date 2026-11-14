@@ -4,8 +4,9 @@
 const path = require('path');
 const fs = require('fs');
 const { chromium } = (() => { try { return require('playwright'); } catch { return require('playwright-core'); } })();
+const { serve } = require('./server');
 
-const url = 'file:///' + path.resolve(__dirname, '..', 'index.html').replace(/\\/g, '/');
+let url; // the game, served over http like GitHub Pages does (set when the server starts)
 const out = path.resolve(__dirname, '..', 'playtest-output');
 fs.mkdirSync(out, { recursive: true });
 const failures = [];
@@ -34,6 +35,11 @@ function installHarness() {
       if (app.state !== 'playing') break; // choice screen, game over...
       const s = scene();
       s.invulnUntil = Infinity;
+      if (s.bonus) {
+        window.__bonusSeen = s.bonus.mode;
+        // Bonus levels last 45 s; after 6 s of one we've seen it work, so end it early to keep the run quick.
+        if (s.bonus.endsAt !== Infinity && s.t > s.bonus.endsAt - BONUS_TIME + 6000) s.bonus.endsAt = s.t;
+      }
       s.P.dmg = Math.max(s.P.dmg, 5);
       s.P.fireDelay = Math.min(s.P.fireDelay, 120);
       s.P.shots = Math.max(s.P.shots, 3);
@@ -54,25 +60,31 @@ function installHarness() {
 
 const visible = (page, id) => page.evaluate(i => !document.getElementById(i).hidden && !document.getElementById('ui').hidden, id);
 
-// Every checkpoint of a 50-stage run, from the run's own route (the seed picks 5 timelines out of 7).
+// Every checkpoint of a 50-wave run, from the run's own route (the seed picks 5 timelines out of 7): each level's
+// boss, the bonus level after it (a chase after the mid-boss, an escape after the timeline boss), and the time jumps.
 const checkpointsFor = route => route.flatMap((era, i) => [
-  [i * 10 + 3, 'chase', era.id],
-  ...(i === 0 ? [[4, 'top']] : []),
   [i * 10 + 5, 'boss', era.mid],
-  [i * 10 + 8, 'escape', era.id],
+  [i * 10 + 5, 'chase', era.id],
+  ...(i === 0 ? [[6, 'top']] : []),
   [i * 10 + 10, 'boss', era.boss],
+  [i * 10 + 10, 'escape', era.id],
   ...(i < 4 ? [[i * 10 + 11, 'timeline', route[i + 1]]] : []),
 ]);
 
-// Start a run from the main menu with a given seed and play until the first shop; returns its offers and route.
-async function firstShop(page, seed) {
+// Start a fresh run from the main menu with a given seed.
+async function startRun(page, seed) {
   await page.evaluate(() => toMenu());
   await page.evaluate(() => __step(3));
   await page.click('#main .primary');
   await page.fill('#seedInput', seed);
   await page.click('#story .primary');
   await page.evaluate(() => { __step(2); scene().tweens.getDelta = () => 1000 / 60; });
-  await page.evaluate(() => __bot(`app.state === 'shop'`, 120));
+}
+
+// Start a run with a given seed and play until the first shop; returns its offers and route.
+async function firstShop(page, seed) {
+  await startRun(page, seed);
+  await page.evaluate(() => __bot(`app.state === 'shop'`, 200));
   return page.evaluate(() => ({ offers: app.shop.offers.map(u => u.id).join(','), route: scene().route.map(e => e.id).join(',') }));
 }
 
@@ -98,13 +110,13 @@ async function run(browser, name, options) {
   check(`${name}: Play opens the story with a seed`, (await visible(page, 'story')) && (await page.inputValue('#seedInput')).length === 6);
   await page.fill('#seedInput', 'TEST1');
   await page.click('#story .primary');
-  await page.evaluate(() => __step(60 * 2)); // time jump, then the first stage card
+  await page.evaluate(() => __step(60 * 2)); // time jump, then the first level card
   const card = await page.evaluate(() => ({ card: scene().lastBanner, era: scene().E.name.toUpperCase(), year: scene().E.year, route: scene().route.length }));
-  check(`${name}: stage card shows the timeline the seed picked`, card.card.includes(card.era) && card.card.includes(card.year) && /STAGE 1\b/.test(card.card) && card.route === 5, JSON.stringify(card));
+  check(`${name}: level card shows the timeline the seed picked`, card.card.includes(card.era) && card.card.includes(card.year) && /LEVEL 1\b/.test(card.card) && /WAVES 1-5/.test(card.card) && card.route === 5, JSON.stringify(card));
   await shot('2-stage-card');
   await page.evaluate(() => __step(60 * 3));
   const started = await page.evaluate(() => ({ state: app.state, stage: scene().stage, seed: app.seed, enemies: scene().enemies.countActive(), road: roadKey(), want: scene().E.road, hp: scene().hp }));
-  check(`${name}: stage 1 starts on that timeline's road with seed TEST1`,
+  check(`${name}: wave 1 starts on that timeline's road with seed TEST1`,
     started.state === 'playing' && started.stage === 1 && started.enemies > 0 && started.road === started.want && started.seed === 'TEST1' && started.hp === 3, JSON.stringify(started));
   await shot('3-stage-1');
 
@@ -122,9 +134,27 @@ async function run(browser, name, options) {
   });
   check(`${name}: Vega keeps walking as the road scrolls`, walk.walking && walk.roadMoved && walk.frames === 'vega0,vega1,vega2', JSON.stringify(walk));
 
-  // ----- The shop -----
+  // ----- A level: 5 waves back to back, then a bonus level, then the shop -----
+  const wave2 = await page.evaluate(() => {
+    __bot(`scene().stage === 2`, 120);
+    return { state: app.state, shopShown: !document.getElementById('shop').hidden, call: scene().lastBanner };
+  });
+  check(`${name}: waves run back to back (no shop between waves)`, wave2.state === 'playing' && !wave2.shopShown && /WAVE 2/.test(wave2.call), JSON.stringify(wave2));
+  const bonus = await page.evaluate(() => {
+    __bot(`scene().bonus && scene().bonus.endsAt !== Infinity`, 200);
+    const s = scene(), hp = s.hp;
+    s.coins = Math.max(s.coins, 10);
+    const coins = s.coins;
+    s.invulnUntil = 0;
+    s.hitPlayer(); // bonus levels: a hit costs coins, never HP
+    return { stage: s.stage, mode: s.bonus.mode, view: s.view, hpSame: s.hp === hp, lostCoins: coins - s.coins, hud: s.hud.text.includes('BONUS') };
+  });
+  check(`${name}: after the wave-5 mid-boss comes a bonus chase, where hits cost coins not HP`,
+    bonus.stage === 5 && bonus.mode === 'chase' && bonus.view === 'side' && bonus.hpSame && bonus.lostCoins > 0 && bonus.hud, JSON.stringify(bonus));
+  await page.evaluate(() => __step(60));
+  await shot('3b-bonus-chase');
   const coinsBefore = await page.evaluate(() => { __bot(`app.state === 'shop'`, 120); return scene().coins; });
-  check(`${name}: clearing stage 1 opens the shop with coins earned`, (await visible(page, 'shop')) && coinsBefore > 0, `$${Math.floor(coinsBefore)}`);
+  check(`${name}: the bonus level ends with a payout, then the shop`, (await visible(page, 'shop')) && coinsBefore > 0 && /BONUS COMPLETE/.test(await page.evaluate(() => scene().lastBanner)), `$${Math.floor(coinsBefore)}`);
   await shot('4-shop');
   const offers1 = await page.evaluate(() => app.shop.offers.map(u => u.id).join(','));
   const route1 = await page.evaluate(() => scene().route.map(e => e.id).join(','));
@@ -152,7 +182,7 @@ async function run(browser, name, options) {
   });
   check(`${name}: coffee in the shop heals 1`, heal === 2, `hp ${heal}`);
   await page.click('#shop [data-action=continue]');
-  check(`${name}: next stage after the shop`, await page.evaluate(() => { __step(10); return app.state === 'playing' && scene().stage === 2; }));
+  check(`${name}: after the shop, level 2 starts at wave 6`, await page.evaluate(() => { __step(60 * 3); return app.state === 'playing' && scene().stage === 6 && /LEVEL 2\b/.test(scene().lastBanner); }));
 
   if (name === 'phone') {
     const combo = await page.evaluate(() => {
@@ -165,11 +195,13 @@ async function run(browser, name, options) {
 
     // ----- Active items -----
     // Hold Vega's fire until a few enemies are on screen (otherwise a strong build shoots each one as it appears).
+    // A boss wave has no regular enemies, so a boss gets knocked out on the spot.
     const waitForEnemies = () => page.evaluate(() => {
       const s = scene(), onScreen = () => s.enemies.getChildren().filter(e => s.isOnScreen(e)).length;
       s.invulnUntil = Infinity;
-      if (app.state === 'shop') document.querySelector('#shop [data-action=continue]').click(); // an earlier check cleared the stage
-      for (let i = 0; i < 1200 && onScreen() < 3 && app.state === 'playing'; i++) {
+      for (let i = 0; i < 1500 && onScreen() < 3; i++) {
+        if (app.state === 'shop') document.querySelector('#shop [data-action=continue]').click(); // an earlier check ended the level
+        if (s.boss?.ready) s.damage(s.boss, 1e6, true);
         s.nextFire = s.nextCannon = s.nextAxe = s.nextBoomerang = s.t + 1000;
         __step(1);
       }
@@ -201,22 +233,24 @@ async function run(browser, name, options) {
       const swapped = !s.owned.airsupport && s.P.active.id === 'remote';
       const stage = s.stage;
       s.charge = s.chargeNeeded();
-      s.stage = 5; // pretend it's a boss stage
+      s.stage = 5; // pretend it's a boss wave
       const refused = s.useActive() === false;
       s.stage = stage;
-      return { swapped, refused, stage };
+      s.bonus = { mode: 'chase', caught: 0, endsAt: Infinity }; // ...and a bonus level
+      const refusedBonus = s.useActive() === false;
+      s.bonus = null;
+      return { swapped, refused, refusedBonus };
     });
     await waitForEnemies();
     const skipped = await page.evaluate(() => {
-      const s = scene();
+      const s = scene(), from = s.stage;
       s.charge = s.chargeNeeded();
       const fired = s.useActive();
       __step(100);
-      return { fired, state: app.state, stage: s.stage };
+      return { fired, state: app.state, from, to: s.stage };
     });
-    check(`${name}: VCR Remote replaces the old item, refuses boss stages, skips to the shop`,
-      skip.swapped && skip.refused && skipped.fired && skipped.state === 'shop' && skipped.stage === skip.stage, JSON.stringify({ skip, skipped }));
-    await page.click('#shop [data-action=continue]');
+    check(`${name}: VCR Remote replaces the old item, refuses boss waves and bonus levels, skips a wave`,
+      skip.swapped && skip.refused && skip.refusedBonus && skipped.fired && skipped.state === 'playing' && skipped.to === skipped.from + 1, JSON.stringify({ skip, skipped }));
 
     await page.evaluate(() => scene().buy(UPGRADE.siren));
     await waitForEnemies();
@@ -238,15 +272,19 @@ async function run(browser, name, options) {
       s.coins = 9999;
       for (const id of ['sixshooter', 'dynamite', 'shuriken', 'axes', 'boomerang', 'fire', 'berserk', 'hearth']) s.buy(UPGRADE[id]);
       const seen = { stars: 0, axe: false, boomerangBack: false, burning: false };
+      // Weak early enemies die from the hit that sets them alight, so watch for hits igniting things instead.
+      const ignite = s.ignite;
+      s.ignite = function (target) { seen.burning = true; return ignite.call(this, target); };
       s.invulnUntil = Infinity;
-      for (let i = 0; i < 400 && app.state === 'playing'; i++) {
+      for (let i = 0; i < 600; i++) {
+        if (app.state === 'shop') document.querySelector('#shop [data-action=continue]').click();
         __step(1);
         seen.stars = Math.max(seen.stars, s.stars.filter(st => st.visible).length);
         for (const b of s.bullets.getChildren()) {
           if (b.texture.key === 'axe') seen.axe = true;
           if (b.texture.key === 'boomerang' && b.returning) seen.boomerangBack = true;
         }
-        if (s.enemies.getChildren().some(e => e.burnUntil > s.t)) seen.burning = true;
+        if ([...s.enemies.getChildren(), s.boss].some(e => e?.burnUntil > s.t)) seen.burning = true;
       }
       return seen;
     });
@@ -256,8 +294,9 @@ async function run(browser, name, options) {
       const fired = await page.evaluate(i => {
         // The stars and dynamite bought above can clear a stage on their own, so wait for an enemy and fire in one go.
         const s = scene();
-        for (let k = 0; k < 900 && !(app.state === 'playing' && s.enemies.getChildren().some(e => s.isOnScreen(e))); k++) {
+        for (let k = 0; k < 1500 && !(app.state === 'playing' && s.enemies.getChildren().some(e => s.isOnScreen(e))); k++) {
           if (app.state === 'shop') document.querySelector('#shop [data-action=continue]').click();
+          if (s.boss?.ready) s.damage(s.boss, 1e6, true); // boss waves have no regular enemies
           s.nextFire = s.nextCannon = s.nextAxe = s.nextBoomerang = s.t + 1000;
           __step(1);
         }
@@ -277,65 +316,66 @@ async function run(browser, name, options) {
     const other = await firstShop(page, 'OTHER9');
     check(`${name}: same seed gives the same timelines and shop, a different seed doesn't`,
       again.offers === offers1 && again.route === route1 && (other.route !== route1 || other.offers !== offers1), JSON.stringify({ route1, again, other }));
-    await page.click('#shop [data-action=continue]');
+    await startRun(page, 'OTHER9'); // a fresh run of that seed, from wave 1, for the full route
 
     const route = await page.evaluate(() => scene().route.map(e => ({ id: e.id, name: e.name.toUpperCase(), road: e.road, mid: e.mid.key, boss: e.boss.key })));
     for (const [stage, kind, key] of checkpointsFor(route)) {
       if (kind === 'chase' || kind === 'escape') {
-        const v = await page.evaluate(n => {
-          // the bot's late-game build can kill each rider as it appears, so wait for the view, not for riders
-          __bot(`scene().stage === ${n} && scene().view === 'side' && app.state === 'playing'`, 200);
+        const v = await page.evaluate(([n, mode]) => {
+          // the bot's late-game build can kill each rider as it appears, so wait for the bonus level, not for riders
+          __bot(`scene().stage === ${n} && scene().bonus?.mode === '${mode}' && scene().bonus.endsAt !== Infinity`, 200);
           const s = scene();
           __step(30);
           const vx = s.bullets.getChildren().reduce((sum, b) => sum + b.body.velocity.x, 0);
-          return { stage: s.stage, view: s.view, mode: s.sideMode, anim: s.player.anims.currentAnim?.key, ground: s.ground.visible, road: s.road.visible, shots: Math.sign(vx) };
-        }, stage);
-        const want = { stage, view: 'side', mode: kind, anim: `ride-${key}-${kind === 'chase' ? 'f' : 'b'}`, ground: true, road: false, shots: kind === 'chase' ? 1 : -1 };
-        check(`${name}: stage ${stage} is a side-view ${kind} in ${key}`, JSON.stringify(v) === JSON.stringify(want), JSON.stringify(v));
-        if (stage % 10 === 3 || stage === 8) await shot(`5-stage-${stage}-${kind}-${key}`);
+          return { stage: s.stage, bonus: s.bonus?.mode, view: s.view, anim: s.player.anims.currentAnim?.key, ground: s.ground.visible, road: s.road.visible, shots: Math.sign(vx) };
+        }, [stage, kind]);
+        const want = { stage, bonus: kind, view: 'side', anim: `ride-${key}-${kind === 'chase' ? 'f' : 'b'}`, ground: true, road: false, shots: kind === 'chase' ? 1 : -1 };
+        check(`${name}: after wave ${stage}, a bonus ${kind} in ${key}`, JSON.stringify(v) === JSON.stringify(want), JSON.stringify(v));
+        if (stage <= 10 || stage % 10 === 5) await shot(`5-wave-${stage}-bonus-${kind}-${key}`);
       } else if (kind === 'top') {
         const v = await page.evaluate(n => {
           __bot(`scene().stage === ${n} && app.state === 'playing'`, 200);
           __step(30);
           return { view: scene().view, anim: scene().player.anims.currentAnim?.key, road: scene().road.visible, obstacles: window.__obstacles };
         }, stage);
-        check(`${name}: back on foot for stage ${stage} (and obstacles showed up in the chase)`, v.view === 'top' && v.anim === 'walk' && v.road && v.obstacles >= 1, JSON.stringify(v));
+        check(`${name}: back on foot for wave ${stage} (and obstacles showed up in the bonus chase)`, v.view === 'top' && v.anim === 'walk' && v.road && v.obstacles >= 1, JSON.stringify(v));
       } else if (kind === 'timeline') {
         const next = await page.evaluate(n => {
-          __bot(`scene().stage === ${n} && /STAGE ${n}\\b/.test(scene().lastBanner)`, 120);
+          __bot(`scene().stage === ${n} && /WAVES ${n}-/.test(scene().lastBanner)`, 120); // the new level's card
           __step(30); // let the new road and the card fade in before the screenshot
           return { stage: scene().stage, card: scene().lastBanner, road: roadKey(), parts: scene().parts };
         }, stage);
         const parts = (stage - 1) / 10;
-        check(`${name}: stage ${stage} jumps to ${key.name} with ${parts} part(s)`, next.card.includes(key.name) && next.road === key.road && next.parts === parts, JSON.stringify(next));
+        check(`${name}: wave ${stage} jumps to ${key.name} with ${parts} part(s)`, next.card.includes(key.name) && next.road === key.road && next.parts === parts, JSON.stringify(next));
         await shot(`6-stage-${stage}-card`);
       } else {
         // Look for the boss arriving: by late stages the bot's build can kill it the moment it becomes hittable.
         const got = await page.evaluate(n => { __bot(`scene().stage === ${n} && scene().boss`, 400); return { stage: scene().stage, boss: scene().boss?.texture.key }; }, stage);
-        check(`${name}: boss on stage ${stage} (${key})`, got.stage === stage && got.boss === key, JSON.stringify(got));
+        check(`${name}: boss on wave ${stage} (${key})`, got.stage === stage && got.boss === key, JSON.stringify(got));
         await page.evaluate(() => { __step(140); scene().boss?.clearTint(); }); // let it fly in; no white hit-flash in the picture
         await shot(`5-boss-stage-${stage}`);
         if (stage === 5) {
-          const hp = await page.evaluate(() => { scene().hp = 1; __bot(`app.state === 'shop'`, 60); return { hp: scene().hp, max: scene().P.maxHp }; });
+          // (stop at the bonus level that follows, so the next checkpoint still sees it)
+          const hp = await page.evaluate(() => { scene().hp = 1; __bot(`scene().bonus`, 60); return { hp: scene().hp, max: scene().P.maxHp }; });
           check(`${name}: mid-boss coffee heals fully`, hp.hp === hp.max, JSON.stringify(hp));
         }
       }
     }
 
-    // Stage 50's boss drops the 5th part: then the choice. Go endless.
+    // Wave 50's boss drops the 5th part; after the escape bonus level comes the choice. Go endless.
     const choice = await page.evaluate(() => { __bot(`app.state === 'choice'`, 200); return { state: app.state, parts: scene().parts }; });
-    check(`${name}: after stage 50 the 5th part brings up the go-home-or-endless choice`, choice.state === 'choice' && choice.parts === 5 && (await visible(page, 'choice')), JSON.stringify(choice));
+    check(`${name}: after wave 50 and its escape, the 5th part brings up the go-home-or-endless choice`, choice.state === 'choice' && choice.parts === 5 && (await visible(page, 'choice')), JSON.stringify(choice));
     await shot('7-choice');
     await page.click('#choice [data-action=endless]');
     const endless = await page.evaluate(() => {
-      __bot(`scene().stage === 51 && /STAGE 51\\b/.test(scene().lastBanner)`, 120);
+      __bot(`scene().stage === 51 && /WAVES 51-/.test(scene().lastBanner)`, 120);
       const s = scene();
       return { stage: s.stage, endless: s.endless, era: s.E.id, picked: s.route.length, hud: s.hud.text.includes('ENDLESS'), card: s.lastBanner };
     });
-    check(`${name}: endless continues to stage 51 in a seeded timeline`, endless.stage === 51 && endless.endless && endless.picked === 6 && endless.hud && endless.card.includes('STAGE 51'), JSON.stringify(endless));
+    check(`${name}: endless continues to wave 51 in a seeded timeline`, endless.stage === 51 && endless.endless && endless.picked === 6 && endless.hud && endless.card.includes('WAVES 51-55'), JSON.stringify(endless));
     await shot('8-endless-51');
     const later = await page.evaluate(() => { __bot(`scene().stage === 61`, 400); return { stage: scene().stage, picked: scene().route.length, distinct: scene().route[5] !== scene().route[6] }; });
-    check(`${name}: endless picks another timeline at stage 61`, later.stage === 61 && later.picked === 7 && later.distinct, JSON.stringify(later));
+    check(`${name}: endless picks another timeline at wave 61`, later.stage === 61 && later.picked === 7 && later.distinct, JSON.stringify(later));
   }
 
   if (name === 'desktop') { // the other ending: after the 5th part, go home
@@ -345,7 +385,7 @@ async function run(browser, name, options) {
       s.stage = FINAL_STAGE;
       s.parts = TIMELINES - 1;
       s.collect(s.drop('part', s.player.x, s.player.y));
-      __step(200);
+      __bot(`app.state === 'choice'`, 120); // through the escape bonus level
       return app.state;
     });
     check(`${name}: the 5th part brings up the choice`, home === 'choice' && (await visible(page, 'choice')), home);
@@ -397,13 +437,45 @@ async function run(browser, name, options) {
   await ctx.close();
 }
 
+// Your own sprites: pretend assets/sprites/ holds two PNGs (the donut template as the coin, the King Lizard
+// template as Vega) and check they replace the built-in ones, and that Vega's hitbox and gun follow his new size.
+async function customSprites(browser) {
+  const templates = path.resolve(__dirname, '..', 'assets', 'templates');
+  if (!fs.existsSync(path.join(templates, 'trex.png'))) return check('custom sprites: templates exported', false, 'run node tools/sprites.js export');
+  const page = await (await browser.newContext({ viewport: { width: 375, height: 812 } })).newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.route('**/assets/sprites/list.js', r => r.fulfill({ contentType: 'text/javascript', body: "const CUSTOM_SPRITES = ['coin', 'vega0'];" }));
+  await page.route('**/assets/sprites/coin.png', r => r.fulfill({ path: path.join(templates, 'donut.png') }));
+  await page.route('**/assets/sprites/vega0.png', r => r.fulfill({ path: path.join(templates, 'trex.png') }));
+  await page.goto(url);
+  await page.waitForFunction(() => typeof scene === 'function' && !!scene(), null, { timeout: 15000 });
+  await page.click('#main .primary');
+  await page.click('#story .primary');
+  await page.waitForTimeout(1500);
+  const r = await page.evaluate(() => {
+    const s = scene(), size = k => { const i = game.textures.get(k).getSourceImage(); return `${i.width}x${i.height}`; };
+    s.player.setTexture('vega0');
+    s.footHitbox();
+    return { coin: size('coin'), vega0: size('vega0'), vega1: size('vega1'), walking: s.player.anims.isPlaying, body: Math.round(s.player.body.width), muzzle: Math.round(s.player.y - s.muzzle().y) };
+  });
+  check('custom sprites replace the built-in ones (the rest stay generated)', r.coin === '36x24' && r.vega0 === '120x84' && r.vega1 === '70x80' && r.walking, JSON.stringify(r));
+  check("custom sprites: Vega's hitbox and gun position follow his sprite's size", r.body === Math.round(120 * 0.43) && r.muzzle === Math.round(84 * 0.475), JSON.stringify(r));
+  await page.screenshot({ path: path.join(out, 'custom-sprites.png') }).catch(() => {});
+  check('custom sprites: no page errors', errors.length === 0, errors.join(' | '));
+}
+
 (async () => {
+  const server = await serve(path.resolve(__dirname, '..'));
+  url = `${server.url}/index.html`;
   const browser = await chromium.launch();
   try {
+    await customSprites(browser);
     await run(browser, 'phone', { viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
     await run(browser, 'desktop', { viewport: { width: 1280, height: 720 } });
   } finally {
     await browser.close();
+    server.close();
   }
   console.log(failures.length ? `\n${failures.length} failed` : `\nall passed; screenshots in ${out}`);
   process.exit(failures.length ? 1 : 0);

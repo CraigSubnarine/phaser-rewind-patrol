@@ -220,6 +220,7 @@ ART.barrel = ['.DDDDDD.', 'D777777D', 'DDDDDDDD', 'D777777D', 'D777777D', 'DDDDD
 // Both are tiles scrolled sideways; drawn in whole columns so they repeat seamlessly.
 function makeSides(scene) {
   const make = (key, w, h, draw) => {
+    if (scene.textures.exists(key)) return; // already made, or replaced by your own image
     const g = scene.make.graphics({ add: false });
     draw(g, new Phaser.Math.RandomDataGenerator([key]));
     g.generateTexture(key, w, h);
@@ -328,6 +329,7 @@ function makeSides(scene) {
 function makeRoads(scene) {
   const TILE = 256, L = 120, R = 480; // the road runs from x=120 to x=480
   const make = (key, draw) => {
+    if (scene.textures.exists(key)) return; // already made, or replaced by your own image
     const g = scene.make.graphics({ add: false });
     draw(g, new Phaser.Math.RandomDataGenerator([key])); // seeded, so the same road every time
     g.generateTexture(key, W, TILE);

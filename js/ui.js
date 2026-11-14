@@ -137,7 +137,7 @@ function endGame(won, s) {
   const era = s.E;
   $('endTitle').textContent = won ? 'CASE CLOSED' : 'GAME OVER';
   $('endText').textContent = (won ? 'Officer Vega is back in 1986, time drive fixed.'
-    : s.endless ? `Lost in time: ${era.name}, ${era.year}, endless stage ${s.stage}.` : `Stranded in ${era.name}, ${era.year}, on stage ${s.stage}.`)
+    : s.endless ? `Lost in time: ${era.name}, ${era.year}, endless wave ${s.stage}.` : `Stranded in ${era.name}, ${era.year}, on wave ${s.stage}.`)
     + ` Score ${s.score}.` + (s.newBest ? ' New best!' : '');
   $('endBuild').textContent = `${buildText(s)} Seed ${app.seed}.`;
   showScreen('end');
@@ -161,7 +161,7 @@ function choose(endless) {
   s.endless = true;
   s.updateHud();
   s.banner('ENDLESS\nPATROL', 1600, 26);
-  s.stageCleared(); // shop, then stage 51 in a new timeline
+  openShop(s); // then wave 51 in a new timeline
 }
 
 // ---------- Shop: between every stage ----------

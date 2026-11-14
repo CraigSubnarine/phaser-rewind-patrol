@@ -34,7 +34,10 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 
 | File | Size | What it is |
 |---|---|---|
-| `legionary.png` | 48 x 48 | Foot soldier, front view. |
+| `legionary.png` | 48 x 48 | Grunt (foot soldier), front view, 12 x 12 pixels drawn at 4x. |
+| `sagittarius.png` | 48 x 48 | Sharpshooter (aims at Vega), front view. |
+| `gladiator.png` | 48 x 48 | Charger (runs at Vega, never shoots), front view. |
+| `praetorian.png` | 56 x 56 | Heavy (takes 4x the hits), front view, 14 x 14 pixels drawn at 4x. |
 | `spear.png` | 9 x 30 | Their shot (points down). |
 | `champion.png` | 120 x 96 | Mid-boss (stage 5): THE ARENA CHAMPION. |
 | `centurion.png` | 120 x 102 | Boss (stage 10): THE IRON CENTURION. |
@@ -55,7 +58,10 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 
 | File | Size | What it is |
 |---|---|---|
-| `knight.png` | 48 x 48 | Foot soldier, front view. |
+| `knight.png` | 48 x 48 | Grunt (foot soldier), front view, 12 x 12 pixels drawn at 4x. |
+| `longbowman.png` | 48 x 48 | Sharpshooter (aims at Vega), front view. |
+| `pikeman.png` | 48 x 48 | Charger (runs at Vega, never shoots), front view. |
+| `maceknight.png` | 56 x 56 | Heavy (takes 4x the hits), front view, 14 x 14 pixels drawn at 4x. |
 | `arrow.png` | 9 x 27 | Their shot (points down). |
 | `siege.png` | 120 x 102 | Mid-boss (stage 5): THE SIEGE ENGINE. |
 | `grimhelm.png` | 120 x 102 | Boss (stage 10): SIR GRIMHELM. |
@@ -75,7 +81,10 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 
 | File | Size | What it is |
 |---|---|---|
-| `pirate.png` | 48 x 48 | Foot soldier, front view. |
+| `pirate.png` | 48 x 48 | Grunt (foot soldier), front view, 12 x 12 pixels drawn at 4x. |
+| `musketeer.png` | 48 x 48 | Sharpshooter (aims at Vega), front view. |
+| `swashbuckler.png` | 48 x 48 | Charger (runs at Vega, never shoots), front view. |
+| `powderbrute.png` | 56 x 56 | Heavy (takes 4x the hits), front view, 14 x 14 pixels drawn at 4x. |
 | `cannonball.png` | 15 x 15 | Their shot (points down). |
 | `kraken.png` | 120 x 78 | Mid-boss (stage 5): THE KRAKEN. |
 | `blackpowder.png` | 120 x 96 | Boss (stage 10): CAPTAIN BLACKPOWDER. |
@@ -96,7 +105,10 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 
 | File | Size | What it is |
 |---|---|---|
-| `outlaw.png` | 48 x 48 | Foot soldier, front view. |
+| `outlaw.png` | 48 x 48 | Grunt (foot soldier), front view, 12 x 12 pixels drawn at 4x. |
+| `rifleman.png` | 48 x 48 | Sharpshooter (aims at Vega), front view. |
+| `bandito.png` | 48 x 48 | Charger (runs at Vega, never shoots), front view. |
+| `bruiser.png` | 56 x 56 | Heavy (takes 4x the hits), front view, 14 x 14 pixels drawn at 4x. |
 | `bullet.png` | 9 x 12 | Their shot (points down). |
 | `gatling.png` | 120 x 78 | Mid-boss (stage 5): THE GATLING WAGON. |
 | `rattler.png` | 120 x 90 | Boss (stage 10): COLONEL RATTLER. |
@@ -117,7 +129,10 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 
 | File | Size | What it is |
 |---|---|---|
-| `ninja.png` | 48 x 48 | Foot soldier, front view. |
+| `ninja.png` | 48 x 48 | Grunt (foot soldier), front view, 12 x 12 pixels drawn at 4x. |
+| `yumi.png` | 48 x 48 | Sharpshooter (aims at Vega), front view. |
+| `ashigaru.png` | 48 x 48 | Charger (runs at Vega, never shoots), front view. |
+| `samurai.png` | 56 x 56 | Heavy (takes 4x the hits), front view, 14 x 14 pixels drawn at 4x. |
 | `shuriken.png` | 15 x 15 | Their shot (points down). |
 | `oni.png` | 120 x 78 | Mid-boss (stage 5): THE ONI. |
 | `shogun.png` | 120 x 84 | Boss (stage 10): THE IRON SHOGUN. |
@@ -137,7 +152,10 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 
 | File | Size | What it is |
 |---|---|---|
-| `viking.png` | 48 x 48 | Foot soldier, front view. |
+| `viking.png` | 48 x 48 | Grunt (foot soldier), front view, 12 x 12 pixels drawn at 4x. |
+| `spearthrower.png` | 48 x 48 | Sharpshooter (aims at Vega), front view. |
+| `raider.png` | 48 x 48 | Charger (runs at Vega, never shoots), front view. |
+| `huscarl.png` | 56 x 56 | Heavy (takes 4x the hits), front view, 14 x 14 pixels drawn at 4x. |
 | `berserker.png` | 120 x 78 | Mid-boss (stage 5): THE BERSERKER. |
 | `frostgiant.png` | 120 x 90 | Boss (stage 10): THE FROST GIANT. |
 | `road-norse.png` | 600 x 256 | Road tile, seen from above. Repeats top to bottom: the top and bottom edges must join. |
@@ -157,7 +175,10 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 
 | File | Size | What it is |
 |---|---|---|
-| `caveman.png` | 48 x 48 | Foot soldier, front view. |
+| `caveman.png` | 48 x 48 | Grunt (foot soldier), front view, 12 x 12 pixels drawn at 4x. |
+| `slinger.png` | 48 x 48 | Sharpshooter (aims at Vega), front view. |
+| `sabretooth.png` | 48 x 48 | Charger (runs at Vega, never shoots), front view. |
+| `clubbrute.png` | 56 x 56 | Heavy (takes 4x the hits), front view, 14 x 14 pixels drawn at 4x. |
 | `stone.png` | 15 x 15 | Their shot (points down). |
 | `mammoth.png` | 120 x 78 | Mid-boss (stage 5): THE WOOLLY MAMMOTH. |
 | `trex.png` | 120 x 84 | Boss (stage 10): THE KING LIZARD. |

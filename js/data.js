@@ -17,52 +17,69 @@ const COIN_CHANCE = 0.2; // chance that a defeated enemy drops a coin
 // each has a mid-boss, stage 10 the timeline's boss, who holds one of the missing time-drive parts. Every stage opens
 // with a card naming the timeline. After stage 50 you can go home or keep going (endless): every 10 stages the seed
 // picks another timeline. Toughness comes from how far along you are (see Play.enemyHp/bossHp), not from the timeline.
-// Vehicle stages use the timeline's `vehicle`, `rider` colors (swapped onto Vega's side-view sprite), `sky` and `obstacle`.
+// Each timeline's `army` names the sprite for each soldier type (see ROLES). Vehicle stages use the timeline's
+// `vehicle`, `rider` colors (swapped onto Vega's side-view sprite), `sky` and `obstacle`.
 const TIMELINES = 5, FINAL_STAGE = TIMELINES * STAGES_PER_ERA;
 const ERAS = [
-  { id: 'rome', name: 'Rome', year: '44 BC', road: 'road-rome', bg: 0x2a120f, lines: 0xffb070, enemy: 'legionary', shot: 'spear',
+  { id: 'rome', name: 'Rome', year: '44 BC', road: 'road-rome', bg: 0x2a120f, lines: 0xffb070, army: { G: 'legionary', S: 'sagittarius', H: 'praetorian', C: 'gladiator' },
+    shot: 'spear',
     part: 'QUARTZ CORE', vehicle: 'chariot', rider: { 9: '4', G: '2', 5: '6' }, sky: 0x9a5a3a, obstacle: 'rock',
     mid: { key: 'champion', name: 'THE ARENA\nCHAMPION', shot: 'spear' },
     boss: { key: 'centurion', name: 'THE IRON\nCENTURION', shot: 'orb' } },
-  { id: 'england', name: 'England', year: '1250 AD', road: 'road-england', bg: 0x0e1a14, lines: 0x9fe0a0, enemy: 'knight', shot: 'arrow',
+  { id: 'england', name: 'England', year: '1250 AD', road: 'road-england', bg: 0x0e1a14, lines: 0x9fe0a0, army: { G: 'knight', S: 'longbowman', H: 'maceknight', C: 'pikeman' },
+    shot: 'arrow',
     part: 'TAPE REEL', vehicle: 'horse', rider: { 9: '6', G: '3', 5: '6' }, sky: 0x5c7fa8, obstacle: 'rock',
     mid: { key: 'siege', name: 'THE SIEGE\nENGINE', shot: 'boulder' },
     boss: { key: 'grimhelm', name: 'SIR GRIMHELM', shot: 'orb' } },
-  { id: 'caribbean', name: 'The Caribbean', year: '1715 AD', road: 'road-caribbean', bg: 0x071a2e, lines: 0x7fd0ff, enemy: 'pirate', shot: 'cannonball',
+  { id: 'caribbean', name: 'The Caribbean', year: '1715 AD', road: 'road-caribbean', bg: 0x071a2e, lines: 0x7fd0ff, army: { G: 'pirate', S: 'musketeer', H: 'powderbrute', C: 'swashbuckler' },
+    shot: 'cannonball',
     part: 'SIREN COIL', vehicle: 'boat', rider: { 9: '2', G: 'E', 5: '5' }, sky: 0x4fa3c7, obstacle: 'barrel',
     mid: { key: 'kraken', name: 'THE KRAKEN', shot: 'ink' },
     boss: { key: 'blackpowder', name: 'CAPTAIN\nBLACKPOWDER', shot: 'orb' } },
-  { id: 'west', name: 'The Wild West', year: '1881 AD', road: 'road-west', bg: 0x3a2412, lines: 0xffc070, enemy: 'outlaw', shot: 'bullet',
+  { id: 'west', name: 'The Wild West', year: '1881 AD', road: 'road-west', bg: 0x3a2412, lines: 0xffc070, army: { G: 'outlaw', S: 'rifleman', H: 'bruiser', C: 'bandito' },
+    shot: 'bullet',
     part: 'CHROME DIAL', vehicle: 'horse', rider: { 9: '7', G: 'D', 5: '5' }, sky: 0xc8723c, obstacle: 'cactus',
     mid: { key: 'gatling', name: 'THE GATLING\nWAGON', shot: 'bullet' },
     boss: { key: 'rattler', name: 'COLONEL\nRATTLER', shot: 'orb' } },
-  { id: 'japan', name: 'Feudal Japan', year: '1600 AD', road: 'road-japan', bg: 0x1a1428, lines: 0xffb7d5, enemy: 'ninja', shot: 'shuriken',
+  { id: 'japan', name: 'Feudal Japan', year: '1600 AD', road: 'road-japan', bg: 0x1a1428, lines: 0xffb7d5, army: { G: 'ninja', S: 'yumi', H: 'samurai', C: 'ashigaru' },
+    shot: 'shuriken',
     part: 'NEON TUBE', vehicle: 'horse', rider: { 9: '9', G: 'E', 5: '6' }, sky: 0x8aa0c8, obstacle: 'rock',
     mid: { key: 'oni', name: 'THE ONI', shot: 'shuriken' },
     boss: { key: 'shogun', name: 'THE IRON\nSHOGUN', shot: 'orb' } },
-  { id: 'norse', name: 'Scandinavia', year: '900 AD', road: 'road-norse', bg: 0x14202c, lines: 0xcfe8ff, enemy: 'viking', shot: 'axe',
+  { id: 'norse', name: 'Scandinavia', year: '900 AD', road: 'road-norse', bg: 0x14202c, lines: 0xcfe8ff, army: { G: 'viking', S: 'spearthrower', H: 'huscarl', C: 'raider' },
+    shot: 'axe',
     part: 'MAGNET RING', vehicle: 'boat', rider: { 9: '6', G: '7', 5: '6' }, sky: 0x9ab4cc, obstacle: 'iceberg',
     mid: { key: 'berserker', name: 'THE BERSERKER', shot: 'axe' },
     boss: { key: 'frostgiant', name: 'THE FROST\nGIANT', shot: 'orb' } },
-  { id: 'stone', name: 'The Stone Age', year: '10,000 BC', road: 'road-stone', bg: 0x16260f, lines: 0xb0ff80, enemy: 'caveman', shot: 'stone',
+  { id: 'stone', name: 'The Stone Age', year: '10,000 BC', road: 'road-stone', bg: 0x16260f, lines: 0xb0ff80, army: { G: 'caveman', S: 'slinger', H: 'clubbrute', C: 'sabretooth' },
+    shot: 'stone',
     part: 'CRYSTAL CHIP', vehicle: 'raptor', rider: { 9: '7', G: 'D', 5: '7' }, sky: 0xb07a50, obstacle: 'rock',
     mid: { key: 'mammoth', name: 'THE WOOLLY\nMAMMOTH', shot: 'stone' },
     boss: { key: 'trex', name: 'THE KING\nLIZARD', shot: 'orb' } },
 ];
 const ERA = Object.fromEntries(ERAS.map(e => [e.id, e]));
 
-// What each non-boss wave of a timeline throws at you: a formation [rows, cols] that flies in and sways,
-// snaking lines [lines, per line], and/or dive-bombers peeling off the formation. It gets busier towards each boss
-// (waves 5 and 10).
+// Soldier types. Every army has all four. Health is the run's base toughness (Play.enemyHp) times `hp`, so some take
+// far more hits than others; `score` multiplies the points. Heavies always drop a coin.
+const ROLES = {
+  C: { name: 'charger', hp: 0.5, score: 1 },        // never shoots: shakes for a moment, then charges at Vega
+  S: { name: 'sharpshooter', hp: 1, score: 1.5 },   // flashes red, then fires a fast shot aimed straight at Vega
+  G: { name: 'grunt', hp: 1.5, score: 1 },          // the rank and file: lobs shots roughly Vega's way
+  H: { name: 'heavy', hp: 4, score: 3, coin: true }, // big and slow to kill: fires a 3-shot spread
+};
+
+// What each non-boss wave of a timeline throws at you, drawn with the ROLES letters ('.' = a gap):
+// `formation` rows fly in and sway (top row = back row), `stream` lines snake down the screen one soldier at a time.
+// Level 1 brings in one new soldier type per wave; level 2 mixes them all, busier towards the boss (waves 5 and 10).
 const STAGES = {
-  1: { formation: [3, 6] },
-  2: { stream: [2, 8] },
-  3: { formation: [4, 7] },
-  4: { formation: [3, 7], stream: [1, 8], divers: true },
-  6: { stream: [3, 8] },
-  7: { formation: [5, 7] },
-  8: { formation: [4, 7], divers: true },
-  9: { formation: [3, 7], stream: [2, 6], divers: true },
+  1: { formation: ['GGGGGG', 'GGGGGG', 'GGGGGG'] },
+  2: { stream: ['GGGGGGGG', 'CCCCCCCC'] },
+  3: { formation: ['SSSSSSS', 'GGGGGGG', 'GGGGGGG', 'CCCCCCC'] },
+  4: { formation: ['SGSGSGS', 'GGGGGGG', '.H.H.H.'], stream: ['CCCCCCCC'] },
+  6: { formation: ['SSSSSS', 'H.HH.H'], stream: ['GGGGGGGG', 'CCCCCCCC', 'GGGGGGGG'] },
+  7: { formation: ['SSSSSSS', 'GGGGGGG', 'GCGCGCG', 'GGGGGGG', 'H.H.H.H'] },
+  8: { formation: ['SSSSSSS', 'CCCCCCC', 'CCCCCCC', '.H.H.H.'], stream: ['GGGGGGGG'] },
+  9: { formation: ['SSSSSSS', 'GGGGGGG', 'HGHGHGH'], stream: ['CCCCCCC', 'GGGGGGG'] },
 };
 
 const DIFFICULTY = {

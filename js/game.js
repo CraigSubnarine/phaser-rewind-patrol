@@ -67,6 +67,7 @@ class Play extends Phaser.Scene {
     this.keys = this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S', false);
     this.hud = this.add.text(14, 14, '', { fontFamily: FONT, fontSize: '14px', color: '#ffffff', lineSpacing: 8, stroke: '#000000', strokeThickness: 4 }).setDepth(10);
     this.shieldRing = this.add.graphics().setDepth(3);
+    this.hpBars = this.add.graphics().setDepth(3); // health bars over soldiers that take more than one hit
     this.partners = [];
 
     // Everything about this run. The seeded generator rolls the shop, so the same seed gives the same offers.
@@ -80,7 +81,7 @@ class Play extends Phaser.Scene {
     Object.assign(this, {
       score: 0, coins: 0, owned: {}, combos: [], parts: 0, best: store.get(bestKey(), 0), newBest: false,
       nextFire: 0, volleys: 0, nextCannon: 0, nextEnemyShot: 0, invulnUntil: 0, shieldNextAt: 0,
-      waveActive: false, spawnsLeft: 0, divers: false, boss: null, vacuum: false, stage: 0, era: 0,
+      waveActive: false, spawnsLeft: 0, nextCharge: 0, boss: null, vacuum: false, stage: 0, era: 0,
       target: { x: this.player.x, y: this.player.y },
       charge: 0, frozenUntil: 0, testudoUntil: 0, streamTimers: [], sideMode: null, nextObstacle: 0,
       nextAxe: 0, nextBoomerang: 0, orbitAngle: 0, chargeLockUntil: 0, endless: false,
@@ -463,55 +464,51 @@ class Play extends Phaser.Scene {
 
   spawnStage(s) {
     const st = STAGES[s];
-    const nForm = st.formation ? st.formation[0] * st.formation[1] : 0;
-    const nStream = st.stream ? st.stream[0] * st.stream[1] : 0;
-    this.spawnsLeft = nStream;
-    if (st.formation) this.formation(...st.formation);
-    if (st.stream) this.stream(...st.stream, nForm ? 2500 : 0);
-    this.divers = !!st.divers;
-    this.nextDive = this.t + 2500;
+    this.spawnsLeft = st.stream ? st.stream.join('').length : 0;
+    if (st.formation) this.formation(st.formation);
+    if (st.stream) this.stream(st.stream, st.formation ? 2500 : 0);
+    this.nextCharge = this.t + 2500;
     this.waveActive = true;
   }
 
-  spawnEnemy(x, y, props) {
-    const era = this.E;
-    return Object.assign(this.enemies.create(x, y, era.enemy), { hp: this.enemyHp() }, props);
+  // One soldier of this timeline's army. `role` is a ROLES letter: it picks the sprite and the health.
+  spawnEnemy(x, y, role, props) {
+    const hp = this.enemyHp() * ROLES[role].hp;
+    return Object.assign(this.enemies.create(x, y, this.E.army[role]), { role, hp, maxHp: hp }, props);
   }
 
-  // A grid that flies in, then sways side to side.
-  formation(rows, cols) {
-    const sx = 70, sy = 62, left = W / 2 - (cols - 1) * sx / 2;
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const e = this.spawnEnemy(W / 2, -60, {
-          mode: 'formation', homeX: left + c * sx, homeY: 130 + r * sy, fromX: Phaser.Math.Between(0, W), fromY: -60 - r * 40, enter: 0,
-        });
-        this.tweens.add({ targets: e, enter: 1, delay: (r * cols + c) * 45, duration: 1100, ease: 'Sine.easeOut' });
-      }
-    }
+  // A grid that flies in, then sways side to side. `rows` are strings of ROLES letters, '.' for a gap.
+  formation(rows) {
+    const sx = 70, sy = 62, cols = Math.max(...rows.map(r => r.length)), left = W / 2 - (cols - 1) * sx / 2;
+    let n = 0;
+    rows.forEach((row, r) => [...row].forEach((role, c) => {
+      if (role === '.') return;
+      const e = this.spawnEnemy(W / 2, -60, role, {
+        mode: 'formation', homeX: left + c * sx, homeY: 130 + r * sy, fromX: Phaser.Math.Between(0, W), fromY: -60 - r * 40, enter: 0,
+      });
+      this.tweens.add({ targets: e, enter: 1, delay: n++ * 45, duration: 1100, ease: 'Sine.easeOut' });
+    }));
   }
 
-  // Lines of enemies snaking down the screen; any that get past just leave.
-  stream(lines, per, delay = 0) {
+  // Lines of soldiers snaking down the screen, one string of ROLES letters per line; any that get past just leave.
+  stream(lines, delay = 0) {
     this.streamTimers = [];
-    for (let s = 0; s < lines; s++) {
-      for (let i = 0; i < per; i++) {
-        this.streamTimers.push(this.time.delayedCall(delay + s * 2600 + i * 260, () => {
-          this.spawnEnemy(W / 2, -40, { mode: 'stream', age: 0, side: s % 2 ? -1 : 1, phase: s * 0.9 });
-          this.spawnsLeft--;
-        }));
-      }
-    }
+    lines.forEach((line, s) => [...line].forEach((role, i) => {
+      this.streamTimers.push(this.time.delayedCall(delay + s * 2600 + i * 260, () => {
+        this.spawnEnemy(W / 2, -40, role, { mode: 'stream', age: 0, side: s % 2 ? -1 : 1, phase: s * 0.9 });
+        this.spawnsLeft--;
+      }));
+    }));
   }
 
   // One rider in a bonus level: from ahead in a chase (they look back to shoot at you) or from behind in an escape.
   // They weave about and now and then try to ram you.
   spawnRider(mode) {
     const chase = mode === 'chase', y = Phaser.Math.Between(BAND_TOP + 20, H - 50), x0 = chase ? W + 70 : -70;
-    const e = this.spawnEnemy(x0, y, {
+    const e = this.spawnEnemy(x0, y, 'G', {
       mode: 'ride', fromX: x0, homeX: chase ? Phaser.Math.Between(330, W - 60) : Phaser.Math.Between(60, 270), baseY: y, phase: Math.random() * 6, enter: 0,
     });
-    e.hp += 1; // riders are tougher than foot soldiers
+    e.hp = e.maxHp = this.enemyHp() + 1; // riders are tougher than foot soldiers
     e.play(`rideE-${this.E.id}-${chase ? 'b' : 'f'}`);
     e.body.setSize(e.width * 0.6, e.height * 0.55, true);
     this.tweens.add({ targets: e, enter: 1, duration: 1400, ease: 'Sine.easeOut' });
@@ -680,14 +677,14 @@ class Play extends Phaser.Scene {
     boom(90);
     if (byPlayer) {
       if (this.bonus) this.bonus.caught++;
-      this.addScore(100 * (this.era + 1));
+      this.addScore(100 * (this.era + 1) * ROLES[e.role].score);
       this.addCharge(1);
       if (this.P.dynamite) { // Dynamite: it blows up a moment later, maybe taking its neighbours with it
         const { x, y } = e;
         this.time.delayedCall(90, () => this.explode(x, y, 60 * this.P.dynamite, 2 * this.dmgNow(), false, this.P.dynamiteBurns));
       }
       const roll = Math.random();
-      if (roll < COIN_CHANCE) this.drop('coin', e.x, e.y);
+      if (roll < COIN_CHANCE || ROLES[e.role].coin) this.drop('coin', e.x, e.y);
       else if (roll < COIN_CHANCE + 0.03) this.drop('donut', e.x, e.y); // rare: heals 1 HP
     }
     e.destroy();
@@ -916,6 +913,12 @@ class Play extends Phaser.Scene {
       this.updateEnemies(dt);
       this.updateBoss();
     } else if (this.boss) this.drawBossBar();
+    this.hpBars.clear();
+    for (const e of this.enemies.getChildren()) { // soldiers that take more than one hit show how worn down they are
+      if (e.hp >= e.maxHp || e.maxHp <= P.dmg) continue;
+      const x = e.x - 17, y = e.y - e.displayHeight / 2 - 8;
+      this.hpBars.fillStyle(0x000000, 0.7).fillRect(x - 1, y - 1, 36, 6).fillStyle(0xff3b3b).fillRect(x, y, 34 * Math.max(0, e.hp) / e.maxHp, 4);
+    }
 
     // Ricochet: shots bounce off the screen edges (on foot: sides and top; in a vehicle: all round the ground band).
     const top = this.view === 'side' ? BAND_TOP - 40 : 6, bottom = this.view === 'side' ? H - 6 : Infinity;
@@ -986,10 +989,11 @@ class Play extends Phaser.Scene {
         e.y = -40 + e.age * 150;
         e.x = W / 2 + e.side * Math.sin(e.age * 1.6 + e.phase) * W * 0.36;
         if (e.y > H + 40) e.destroy();
-      } else if (e.mode === 'dive') {
+      } else if (e.mode === 'dive') { // a charger running at Vega
         e.x += e.vx * dt;
         e.y += e.vy * dt;
-        if (e.y > H + 40) { // walked past: come back in from the top to its old spot
+        if (e.y > H + 40 && e.homeX === undefined) e.destroy(); // from a stream: gone
+        else if (e.y > H + 40) { // from a formation: come back in from the top to its old spot
           Object.assign(e, { mode: 'formation', fromX: e.homeX, fromY: -60, enter: 0 });
           this.tweens.add({ targets: e, enter: 1, duration: 1200, ease: 'Sine.easeOut' });
         }
@@ -1005,17 +1009,30 @@ class Play extends Phaser.Scene {
           this.tweens.add({ targets: e, enter: 1, duration: 1400, ease: 'Sine.easeOut' });
         }
       }
+      if (!e.active) continue;
+      if (e.windup) { // a charger shaking before it charges
+        if (this.et < e.windup) e.x += Phaser.Math.Between(-3, 3);
+        else {
+          const vy = 420;
+          Object.assign(e, { windup: 0, mode: 'dive', vy, vx: (this.player.x - e.x) * vy / Math.max(200, this.player.y - e.y) });
+          e.clearTint();
+          beep(280, 90, 0.03);
+        }
+      }
+      if (e.snipeAt && this.et >= e.snipeAt) { // a sharpshooter done aiming: a fast shot straight at Vega
+        e.snipeAt = 0;
+        e.clearTint();
+        if (this.player.active) this.shoot(e.x, e.y + 20, this.E.shot, this.diff.shotSpeed * 1.4, this.angleToPlayer(e.x, e.y + 20));
+      }
     }
 
     const pressure = (1 + 0.2 * this.era + 0.04 * ((this.stage - 1) % STAGES_PER_ERA)) * this.diff.fire;
     const side = this.view === 'side';
-    if (this.divers && this.t > this.nextDive) {
-      this.nextDive = this.t + 1500 / this.diff.fire;
-      const e = Phaser.Utils.Array.GetRandom(this.enemies.getChildren().filter(x => x.mode === 'formation' && x.enter === 1));
-      if (e && this.player.active) {
-        Object.assign(e, { mode: 'dive', vx: (this.player.x - e.x) * 0.45, vy: 300 });
-        beep(280, 90, 0.03);
-      }
+    if (!side && this.t > this.nextCharge) { // a charger picks its moment (in place, or partway down its stream)
+      this.nextCharge = this.t + 1500 / this.diff.fire;
+      const ready = x => x.role === 'C' && !x.windup && (x.mode === 'formation' ? x.enter === 1 : x.mode === 'stream' && x.y > 60 && x.y < H * 0.45);
+      const e = Phaser.Utils.Array.GetRandom(this.enemies.getChildren().filter(ready));
+      if (e && this.player.active) e.setTint(0xff5050).windup = this.et + 350;
     }
     const racing = side && this.bonus && this.t < this.bonus.endsAt;
     if (racing && this.t > this.nextDive) { // a rider tries to ram Vega
@@ -1033,12 +1050,17 @@ class Play extends Phaser.Scene {
 
     if (this.t > this.nextEnemyShot) {
       // fire gets faster with each timeline and with each stage inside it
-      const shooters = this.enemies.getChildren().filter(x => (side ? x.x > 0 && x.x < W : x.y > 0 && x.y < H * 0.7));
+      // (chargers never shoot; a sharpshooter already taking aim isn't picked again)
+      const shooters = this.enemies.getChildren().filter(x => x.role !== 'C' && !x.snipeAt && (side ? x.x > 0 && x.x < W : x.y > 0 && x.y < H * 0.7));
       this.nextEnemyShot = this.t + (shooters.length ? 1000 : 300) / pressure;
-      const e = Phaser.Utils.Array.GetRandom(shooters);
-      // On foot they lob shots roughly your way; riders aim straight at you.
-      if (e && side) this.shoot(e.x + Math.sign(this.player.x - e.x) * 24, e.y - 6, this.E.shot, this.diff.shotSpeed, this.angleToPlayer(e.x, e.y));
-      else if (e) this.shoot(e.x, e.y + 20, this.E.shot, this.diff.shotSpeed, Phaser.Math.Clamp(this.angleToPlayer(e.x, e.y) * 0.5, -0.5, 0.5));
+      const e = Phaser.Utils.Array.GetRandom(shooters), shot = this.E.shot, speed = this.diff.shotSpeed;
+      const lob = e && Phaser.Math.Clamp(this.angleToPlayer(e.x, e.y) * 0.5, -0.5, 0.5);
+      // Riders aim straight at you. On foot, grunts lob shots roughly your way, heavies a spread of 3, and
+      // sharpshooters flash red for a moment first, then aim properly (see above).
+      if (e && side) this.shoot(e.x + Math.sign(this.player.x - e.x) * 24, e.y - 6, shot, speed, this.angleToPlayer(e.x, e.y));
+      else if (e?.role === 'S') e.setTint(0xff5050).snipeAt = this.et + 450;
+      else if (e?.role === 'H') for (const d of [-0.3, 0, 0.3]) this.shoot(e.x, e.y + 26, shot, speed * 0.9, lob + d);
+      else if (e) this.shoot(e.x, e.y + 20, shot, speed, lob);
     }
   }
 

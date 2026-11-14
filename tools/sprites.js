@@ -36,7 +36,7 @@ async function exportTemplates() {
       const size = k => { const s = game.textures.get(k).getSourceImage(); return [s.width, s.height]; };
       return {
         sizes: Object.fromEntries(keys.map(k => [k, size(k)])),
-        eras: ERAS.map(e => ({ id: e.id, name: e.name, enemy: e.enemy, shot: e.shot, mid: e.mid.key, midName: e.mid.name.replace('\n', ' '),
+        eras: ERAS.map(e => ({ id: e.id, name: e.name, army: e.army, shot: e.shot, mid: e.mid.key, midName: e.mid.name.replace('\n', ' '),
           boss: e.boss.key, bossName: e.boss.name.replace('\n', ' '), obstacle: e.obstacle, vehicle: e.vehicle })),
       };
     });
@@ -81,7 +81,10 @@ function describe({ sizes, eras }) {
   ]);
   for (const e of eras) {
     md += `## ${e.name}\n\n` + table([
-      row(e.enemy, 'Foot soldier, front view.'),
+      row(e.army.G, 'Grunt (foot soldier), front view, 12 x 12 pixels drawn at 4x.'),
+      row(e.army.S, 'Sharpshooter (aims at Vega), front view.'),
+      row(e.army.C, 'Charger (runs at Vega, never shoots), front view.'),
+      row(e.army.H, 'Heavy (takes 4x the hits), front view, 14 x 14 pixels drawn at 4x.'),
       row(e.shot, 'Their shot (points down).'),
       row(e.mid, `Mid-boss (stage 5): ${e.midName}.`),
       row(e.boss, `Boss (stage 10): ${e.bossName}.`),

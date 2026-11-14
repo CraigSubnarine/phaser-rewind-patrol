@@ -15,7 +15,13 @@ No build step and no asset files: the pixel art is drawn from text grids in the 
 - **Levels:** each timeline is two levels of **5 waves played back to back**: a card at the start of the level (timeline, year, level, waves), then just a quick "WAVE n" call between waves, no stopping. The 5th wave is the boss:
   - Level 1 ends with a mid-boss (Arena Champion, Siege Engine, Kraken, Gatling Wagon, Oni, Berserker, Woolly Mammoth): coffee (full heal) and coins.
   - Level 2 ends with the timeline's boss (Iron Centurion, Sir Grimhelm, Captain Blackpowder, Colonel Rattler, Iron Shogun, Frost Giant, King Lizard): one of the 5 time-drive parts.
-  - Other waves: formations, snaking lines and dive-bombers, getting busier towards each boss (`STAGES`).
+  - Other waves: formations that fly in and sway, and snaking lines, drawn as rows of letters in `STAGES`. Level 1 brings in one new soldier type per wave; level 2 mixes them all, busier towards the boss.
+- **Soldiers:** every army has 4 types (`ROLES`), each with its own sprite and health (the run's toughness times a multiplier, so some take far more hits than others):
+  - **Charger** (×0.5 health): never shoots; shakes for a moment, then runs down at Vega.
+  - **Sharpshooter** (×1): flashes red, then fires a fast shot aimed straight at Vega.
+  - **Grunt** (×1.5): lobs shots roughly Vega's way.
+  - **Heavy** (×4, bigger): fires a spread of 3, worth 3× the points, always drops a coin.
+  - Soldiers that take more than one hit show a health bar once hit. Rome: archer, gladiator, praetorian. England: longbowman, pikeman, mace knight. Caribbean: musketeer, swashbuckler, powder-keg brute. West: rifleman, bandito, bruiser. Japan: yumi archer, ashigaru, samurai. Scandinavia: spear thrower, raider, huscarl. Stone Age: slinger, sabre-tooth, club brute.
 - **Bonus levels:** a mini-boss level sometimes (`BONUS_CHANCE`, 50%, seeded) leads into a 45-second side-view bonus level on the timeline's ride (chariot, horse, rowboat or longboat, raptor), either a **chase** (riders ahead look back to shoot at you; you shoot ahead) or an **escape** (riders behind chase you; you shoot backwards). The timeline boss's level never has one. Riders keep coming, weave and try to ram you; rocks, barrels, cacti or icebergs come at you from ahead and soak up shots. Every rider you take down pays out at the end, and a hit costs coins, never HP, so a bonus level can't end your run.
 - **After wave 50:** with all 5 parts, choose **Return to 1986** (the ending) or **Go endless**: the run keeps going with a new seeded timeline every 10 waves (never the same twice in a row), tougher each time; bosses drop coffee and coins instead of parts.
 - **Health:** 3 HP on Normal (5 on Easy). Donuts heal 1. When HP runs out, the run is over.

@@ -33,6 +33,14 @@ function installHarness() {
     const r = new Phaser.Math.RandomDataGenerator([`${seed}/bonus`]);
     return Array.from({ length: n }, () => (r.frac() < BONUS_CHANCE ? r.pick(['chase', 'escape']) : null));
   };
+  // Every soldier spawned (wave, type, and whether its health is the run's toughness x its type's multiplier).
+  window.__spawned = [];
+  const spawn = Play.prototype.spawnEnemy;
+  Play.prototype.spawnEnemy = function (x, y, role, props) {
+    const e = spawn.call(this, x, y, role, props);
+    if (window.__spawnLog !== false) __spawned.push({ stage: this.stage, role, ok: Math.abs(e.hp - this.enemyHp() * ROLES[role].hp) < 1e-9 });
+    return e;
+  };
   // The first seed PREFIX1, PREFIX2... whose bonus plan passes the test.
   window.findSeed = (prefix, n, ok) => { for (let i = 1; ; i++) if (ok(bonusPlan(prefix + i, n))) return prefix + i; };
   window.__bot = (expr, maxSeconds) => {
@@ -148,13 +156,69 @@ async function run(browser, name, options) {
     // Coins are rare: about 1 defeated enemy in 5 drops one.
     const rate = await page.evaluate(() => {
       const s = scene(), drop = s.drop, seen = { coin: 0, donut: 0 }, n = 500;
+      const kill = role => s.killEnemy(s.spawnEnemy(-300, -300, role, { mode: 'stream', age: 0, side: 1, phase: 0 }), true);
+      window.__spawnLog = false;
       s.drop = function (type, x, y) { seen[type] = (seen[type] || 0) + 1; return drop.call(this, type, x, y); };
-      for (let i = 0; i < n; i++) s.killEnemy(s.spawnEnemy(-300, -300, { mode: 'stream', age: 0, side: 1, phase: 0 }), true);
+      for (let i = 0; i < n; i++) kill('G');
+      const grunts = { coin: seen.coin / n, donut: seen.donut / n };
+      seen.coin = 0;
+      for (let i = 0; i < 20; i++) kill('H');
       s.drop = drop;
+      window.__spawnLog = true;
       for (const p of s.pickups.getChildren().slice()) if (p.x < -100) p.destroy();
-      return { coin: seen.coin / n, donut: seen.donut / n };
+      return { ...grunts, heavyCoins: seen.coin };
     });
-    check(`${name}: about 1 enemy in 5 drops a coin`, rate.coin > 0.1 && rate.coin < 0.3 && rate.donut < 0.08, JSON.stringify(rate));
+    check(`${name}: about 1 enemy in 5 drops a coin (heavies always do)`, rate.coin > 0.1 && rate.coin < 0.3 && rate.donut < 0.08 && rate.heavyCoins === 20, JSON.stringify(rate));
+
+    // The four soldier types: their own sprite and health, sharpshooters aim, chargers charge, health bars show.
+    const roles = await page.evaluate(() => {
+      const s = scene(), hold = () => { s.nextFire = s.nextCannon = s.nextAxe = s.nextBoomerang = s.t + 100000; };
+      const at = (role, x, y) => s.spawnEnemy(x, y, role, { mode: 'formation', homeX: x, homeY: y, fromX: x, fromY: y, enter: 1 });
+      window.__spawnLog = false;
+      s.invulnUntil = Infinity;
+      hold();
+      const hp = Object.fromEntries(Object.keys(ROLES).map(k => {
+        const e = at(k, -300, -300), ok = e.hp === s.enemyHp() * ROLES[k].hp && e.texture.key === s.E.army[k];
+        e.destroy();
+        return [k, ok ? e.hp : 'wrong'];
+      }));
+      // Sharpshooter: once it has aimed, a faster shot straight at Vega.
+      s.placePlayer(480, H - 110);
+      const sn = at('S', 150, 200), shoot = s.shoot;
+      let snipe = null;
+      s.shoot = function (x, y, tex, speed, angle) {
+        if (!snipe && Math.abs(x - sn.x) < 1) snipe = { aimed: Math.abs(angle - this.angleToPlayer(x, y)) < 0.01, fast: speed > this.diff.shotSpeed };
+        return shoot.apply(this, arguments);
+      };
+      sn.setTint(0xff5050).snipeAt = s.et + 450;
+      for (let i = 0; i < 60 && !snipe; i++) { hold(); __step(1); }
+      s.shoot = shoot;
+      sn.destroy();
+      // Charger: shakes, then runs down at Vega. (Wave 1 is all grunts, so it's the only charger around.)
+      const ch = at('C', 300, 150);
+      s.nextCharge = 0;
+      let wound = false;
+      for (let i = 0; i < 90 && ch.mode !== 'dive'; i++) { hold(); __step(1); wound ||= ch.windup > 0; }
+      const charge = { wound, mode: ch.mode, down: ch.vy > 0, toward: Math.sign(ch.vx) === Math.sign(s.player.x - ch.x) };
+      ch.destroy();
+      // Heavy: a health bar once it's been hit.
+      const hv = at('H', 300, 300);
+      s.damage(hv, 1, false);
+      hold();
+      __step(1);
+      const bar = s.hpBars.commandBuffer.length > 0 && hv.hp < hv.maxHp;
+      hv.destroy();
+      s.placePlayer(W / 2, H - 110);
+      s.nextFire = s.nextCannon = s.nextAxe = s.nextBoomerang = 0;
+      s.invulnUntil = 0;
+      window.__spawnLog = true;
+      return { hp, snipe, charge, bar };
+    });
+    check(`${name}: soldier types have their own health (charger < sharpshooter < grunt < heavy)`,
+      roles.hp.C < roles.hp.S && roles.hp.S < roles.hp.G && roles.hp.G < roles.hp.H, JSON.stringify(roles.hp));
+    check(`${name}: sharpshooters fire a fast shot aimed straight at Vega`, roles.snipe?.aimed && roles.snipe?.fast, JSON.stringify(roles.snipe));
+    check(`${name}: chargers shake, then run down at Vega`, roles.charge.wound && roles.charge.mode === 'dive' && roles.charge.down && roles.charge.toward, JSON.stringify(roles.charge));
+    check(`${name}: a hit heavy shows a health bar`, roles.bar);
     // The Caribbean pier is wide enough that Vega (x 35-565) and the pirates never walk on the water.
     const pier = await page.evaluate(() => {
       const wood = x => { const c = game.textures.getPixel(x, 5, 'road-caribbean'); return c.red > c.blue; };
@@ -187,6 +251,13 @@ async function run(browser, name, options) {
   await shot(`3b-bonus-${mode1}`);
   const coinsBefore = await page.evaluate(() => { __bot(`app.state === 'shop'`, 120); return scene().coins; });
   check(`${name}: the bonus level ends with a payout, then the shop`, (await visible(page, 'shop')) && coinsBefore > 0 && /BONUS COMPLETE/.test(await page.evaluate(() => scene().lastBanner)), `$${Math.floor(coinsBefore)}`);
+  const spawned = await page.evaluate(() => {
+    const by = {};
+    for (const r of __spawned) if (r.stage <= 4) (by[r.stage] ||= new Set()).add(r.role);
+    return { roles: Object.fromEntries(Object.entries(by).map(([k, v]) => [k, [...v].sort().join('')])), hpOk: __spawned.every(r => r.ok) };
+  });
+  check(`${name}: level 1 brings in a new soldier type each wave (grunts, chargers, sharpshooters, heavies)`,
+    JSON.stringify(spawned.roles) === JSON.stringify({ 1: 'G', 2: 'CG', 3: 'CGS', 4: 'CGHS' }) && spawned.hpOk, JSON.stringify(spawned));
   await shot('4-shop');
   const offers1 = await page.evaluate(() => app.shop.offers.map(u => u.id).join(','));
   const route1 = await page.evaluate(() => scene().route.map(e => e.id).join(','));
@@ -454,6 +525,33 @@ async function run(browser, name, options) {
   await shot('9-game-over');
   await page.click('#end button:not(.primary)');
   check(`${name}: back to main menu`, await visible(page, 'main'));
+
+  if (name === 'phone') { // every army's lineup: grunt, sharpshooter, charger, heavy
+    await page.evaluate(() => {
+      document.getElementById('sheet')?.remove();
+      const sheet = document.createElement('div');
+      sheet.id = 'sheet';
+      sheet.style.cssText = 'position:fixed;inset:0;z-index:9;background:#140a26;padding:14px;overflow:hidden;font:11px monospace;color:#fff';
+      for (const e of ERAS) {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;gap:14px;align-items:flex-end;margin-bottom:12px';
+        const label = document.createElement('span');
+        label.style.width = '80px';
+        label.textContent = e.name;
+        row.append(label);
+        for (const k of 'GSCH') {
+          const img = new Image();
+          img.src = game.textures.getBase64(e.army[k]);
+          img.style.imageRendering = 'pixelated';
+          row.append(img);
+        }
+        sheet.append(row);
+      }
+      document.body.append(sheet);
+    });
+    await page.waitForTimeout(300);
+    await shot('10-armies');
+  }
 
   if (name === 'phone') { // sprite sheets: every texture at 2x, for checking the pixel art (two pages, it's a lot)
     const keys = await page.evaluate(() => Object.keys(ART).sort((a, b) => b.startsWith('vega') - a.startsWith('vega')).filter(k => !/^ride.*1$/.test(k)));

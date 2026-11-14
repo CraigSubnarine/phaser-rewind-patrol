@@ -363,15 +363,18 @@ function makeRoads(scene) {
     g.fillStyle(0x57391f).fillRect(L + 90, 0, 14, TILE).fillRect(R - 104, 0, 14, TILE);
     for (let i = 0; i < 40; i++) g.fillStyle(0x8a6a4a).fillRect(rnd.between(L + 6, R - 10), rnd.between(0, TILE - 4), 4, 4);
   });
-  make('road-caribbean', (g, rnd) => { // wooden pier over the sea
+  make('road-caribbean', (g, rnd) => { // a wide wooden pier over the sea, rope rails along its edges
+    // ponytail: its own edges, wider than the other roads, so nobody on it (Vega walks x 35-565) is over the water.
+    const pl = 24, pr = W - 24;
     g.fillStyle(0x0d4a6e).fillRect(0, 0, W, TILE);
-    for (let i = 0; i < 40; i++) g.fillStyle(0x2f7fa8).fillRect(rnd.between(0, W - 24), rnd.between(0, TILE - 3), rnd.between(10, 24), 3);
+    for (let i = 0; i < 16; i++) g.fillStyle(0x2f7fa8).fillRect(rnd.pick([rnd.between(0, 10), rnd.between(W - 22, W - 12)]), rnd.between(0, TILE - 3), 10, 3);
     for (let y = 0; y < TILE; y += 32) {
-      g.fillStyle(0x3b2614).fillRect(L, y, R - L, 32);
-      g.fillStyle(rnd.pick([0x8a5a2b, 0x7d5126, 0x936233])).fillRect(L, y + 2, R - L, 28);
-      g.fillStyle(0x3b2614).fillRect(L + 12, y + 14, 4, 4).fillRect(R - 16, y + 14, 4, 4); // nails
+      g.fillStyle(0x3b2614).fillRect(pl, y, pr - pl, 32);
+      g.fillStyle(rnd.pick([0x8a5a2b, 0x7d5126, 0x936233])).fillRect(pl, y + 2, pr - pl, 28);
+      for (const x of [pl + 14, W / 2 - 2, pr - 18]) g.fillStyle(0x3b2614).fillRect(x, y + 14, 4, 4); // nails
     }
-    for (let y = 0; y < TILE; y += 128) g.fillStyle(0x4a2f17).fillRect(L - 14, y + 40, 14, 20).fillRect(R, y + 40, 14, 20); // posts
+    for (let y = 0; y < TILE; y += 64) g.fillStyle(0x4a2f17).fillRect(pl - 10, y + 24, 16, 16).fillRect(pr - 6, y + 24, 16, 16); // posts
+    g.fillStyle(0xd8c49a).fillRect(pl - 3, 0, 4, TILE).fillRect(pr - 1, 0, 4, TILE); // rope rails
   });
   make('road-west', (g, rnd) => { // dusty trail with wagon ruts between cacti
     g.fillStyle(0xc8a064).fillRect(0, 0, W, TILE);

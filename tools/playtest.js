@@ -28,6 +28,13 @@ function installHarness() {
     while ((card = document.querySelector('#shopItems .card:not(:disabled)'))) card.click();
     document.querySelector('#shop [data-action=continue]').click();
   };
+  // Which mini-boss levels of a seed lead into a bonus level (mirrors Play.rollBonus: one roll per timeline).
+  window.bonusPlan = (seed, n) => {
+    const r = new Phaser.Math.RandomDataGenerator([`${seed}/bonus`]);
+    return Array.from({ length: n }, () => (r.frac() < BONUS_CHANCE ? r.pick(['chase', 'escape']) : null));
+  };
+  // The first seed PREFIX1, PREFIX2... whose bonus plan passes the test.
+  window.findSeed = (prefix, n, ok) => { for (let i = 1; ; i++) if (ok(bonusPlan(prefix + i, n))) return prefix + i; };
   window.__bot = (expr, maxSeconds) => {
     const until = new Function(`return ${expr}`);
     for (let f = 0; f < maxSeconds * 60 && !until(); f++) {
@@ -60,14 +67,15 @@ function installHarness() {
 
 const visible = (page, id) => page.evaluate(i => !document.getElementById(i).hidden && !document.getElementById('ui').hidden, id);
 
-// Every checkpoint of a 50-wave run, from the run's own route (the seed picks 5 timelines out of 7): each level's
-// boss, the bonus level after it (a chase after the mid-boss, an escape after the timeline boss), and the time jumps.
-const checkpointsFor = route => route.flatMap((era, i) => [
+// Every checkpoint of a 50-wave run, from the run's own route (the seed picks 5 timelines out of 7) and bonus plan:
+// each level's boss, what follows it (the mid-boss: the seed's bonus chase or escape, or straight to the shop; the
+// timeline boss: always straight to the shop), and the time jumps.
+const checkpointsFor = (route, plan) => route.flatMap((era, i) => [
   [i * 10 + 5, 'boss', era.mid],
-  [i * 10 + 5, 'chase', era.id],
+  [i * 10 + 5, plan[i] ?? 'noBonus', era.id],
   ...(i === 0 ? [[6, 'top']] : []),
   [i * 10 + 10, 'boss', era.boss],
-  [i * 10 + 10, 'escape', era.id],
+  [i * 10 + 10, 'noBonus', era.id],
   ...(i < 4 ? [[i * 10 + 11, 'timeline', route[i + 1]]] : []),
 ]);
 
@@ -103,12 +111,14 @@ async function run(browser, name, options) {
   await page.goto(url);
   await page.waitForFunction(() => typeof scene === 'function' && !!scene(), null, { timeout: 15000 });
   await page.evaluate(installHarness);
+  const seed1 = await page.evaluate(() => findSeed('TEST', 1, p => p[0])); // its first mini-boss leads into a bonus level
+  const mode1 = await page.evaluate(sd => bonusPlan(sd, 1)[0], seed1);
   check(`${name}: main menu on load`, await visible(page, 'main'));
   await shot('1-menu');
 
   await page.click('#main .primary');
   check(`${name}: Play opens the story with a seed`, (await visible(page, 'story')) && (await page.inputValue('#seedInput')).length === 6);
-  await page.fill('#seedInput', 'TEST1');
+  await page.fill('#seedInput', seed1);
   await page.click('#story .primary');
   await page.evaluate(() => __step(60 * 2)); // time jump, then the first level card
   const card = await page.evaluate(() => ({ card: scene().lastBanner, era: scene().E.name.toUpperCase(), year: scene().E.year, route: scene().route.length }));
@@ -116,12 +126,12 @@ async function run(browser, name, options) {
   await shot('2-stage-card');
   await page.evaluate(() => __step(60 * 3));
   const started = await page.evaluate(() => ({ state: app.state, stage: scene().stage, seed: app.seed, enemies: scene().enemies.countActive(), road: roadKey(), want: scene().E.road, hp: scene().hp }));
-  check(`${name}: wave 1 starts on that timeline's road with seed TEST1`,
-    started.state === 'playing' && started.stage === 1 && started.enemies > 0 && started.road === started.want && started.seed === 'TEST1' && started.hp === 3, JSON.stringify(started));
+  check(`${name}: wave 1 starts on that timeline's road with seed ${seed1}`,
+    started.state === 'playing' && started.stage === 1 && started.enemies > 0 && started.road === started.want && started.seed === seed1 && started.hp === 3, JSON.stringify(started));
   await shot('3-stage-1');
 
   await page.click('#pauseBtn');
-  check(`${name}: pause shows the build, route and seed`, (await visible(page, 'pause')) && /Route: .+ > .+Seed TEST1/.test(await page.textContent('#pauseBuild')));
+  check(`${name}: pause shows the build, route and seed`, (await visible(page, 'pause')) && new RegExp(`Route: .+ > .+Seed ${seed1}`).test(await page.textContent('#pauseBuild')));
   await page.click('#pause .primary');
   check(`${name}: resume`, await page.evaluate(() => app.state === 'playing'));
 
@@ -133,6 +143,28 @@ async function run(browser, name, options) {
     return { frames: [...seen].sort().join(','), walking: s.player.anims.isPlaying, roadMoved: s.road.tilePositionY !== road0 };
   });
   check(`${name}: Vega keeps walking as the road scrolls`, walk.walking && walk.roadMoved && walk.frames === 'vega0,vega1,vega2', JSON.stringify(walk));
+
+  if (name === 'phone') {
+    // Coins are rare: about 1 defeated enemy in 5 drops one.
+    const rate = await page.evaluate(() => {
+      const s = scene(), drop = s.drop, seen = { coin: 0, donut: 0 }, n = 500;
+      s.drop = function (type, x, y) { seen[type] = (seen[type] || 0) + 1; return drop.call(this, type, x, y); };
+      for (let i = 0; i < n; i++) s.killEnemy(s.spawnEnemy(-300, -300, { mode: 'stream', age: 0, side: 1, phase: 0 }), true);
+      s.drop = drop;
+      for (const p of s.pickups.getChildren().slice()) if (p.x < -100) p.destroy();
+      return { coin: seen.coin / n, donut: seen.donut / n };
+    });
+    check(`${name}: about 1 enemy in 5 drops a coin`, rate.coin > 0.1 && rate.coin < 0.3 && rate.donut < 0.08, JSON.stringify(rate));
+    // The Caribbean pier is wide enough that Vega (x 35-565) and the pirates never walk on the water.
+    const pier = await page.evaluate(() => {
+      const wood = x => { const c = game.textures.getPixel(x, 5, 'road-caribbean'); return c.red > c.blue; };
+      return { inside: [36, 120, 300, 480, 564].every(wood), sea: !wood(8) && !wood(592) };
+    });
+    check(`${name}: the Caribbean pier spans the whole walkway, with water only at the edges`, pier.inside && pier.sea, JSON.stringify(pier));
+    await page.evaluate(() => { const s = scene(); s.road.setTexture('road-caribbean'); s.placePlayer(40, H - 110); __step(2); });
+    await shot('3a-caribbean-pier');
+    await page.evaluate(() => { const s = scene(); s.road.setTexture(s.E.road); s.placePlayer(W / 2, H - 110); });
+  }
 
   // ----- A level: 5 waves back to back, then a bonus level, then the shop -----
   const wave2 = await page.evaluate(() => {
@@ -149,10 +181,10 @@ async function run(browser, name, options) {
     s.hitPlayer(); // bonus levels: a hit costs coins, never HP
     return { stage: s.stage, mode: s.bonus.mode, view: s.view, hpSame: s.hp === hp, lostCoins: coins - s.coins, hud: s.hud.text.includes('BONUS') };
   });
-  check(`${name}: after the wave-5 mid-boss comes a bonus chase, where hits cost coins not HP`,
-    bonus.stage === 5 && bonus.mode === 'chase' && bonus.view === 'side' && bonus.hpSame && bonus.lostCoins > 0 && bonus.hud, JSON.stringify(bonus));
+  check(`${name}: after the wave-5 mid-boss, seed ${seed1} rolls a bonus ${mode1}, where hits cost coins not HP`,
+    bonus.stage === 5 && bonus.mode === mode1 && bonus.view === 'side' && bonus.hpSame && bonus.lostCoins > 0 && bonus.hud, JSON.stringify(bonus));
   await page.evaluate(() => __step(60));
-  await shot('3b-bonus-chase');
+  await shot(`3b-bonus-${mode1}`);
   const coinsBefore = await page.evaluate(() => { __bot(`app.state === 'shop'`, 120); return scene().coins; });
   check(`${name}: the bonus level ends with a payout, then the shop`, (await visible(page, 'shop')) && coinsBefore > 0 && /BONUS COMPLETE/.test(await page.evaluate(() => scene().lastBanner)), `$${Math.floor(coinsBefore)}`);
   await shot('4-shop');
@@ -311,15 +343,20 @@ async function run(browser, name, options) {
     }
     await shot('4c-new-gear');
 
-    // Same seed: same first shop and same 5 timelines. (offers1/route1 came from seed TEST1 before buying anything.)
-    const again = await firstShop(page, 'TEST1');
+    // Same seed: same first shop and same 5 timelines. (offers1/route1 came from seed1 before buying anything.)
+    const again = await firstShop(page, seed1);
     const other = await firstShop(page, 'OTHER9');
     check(`${name}: same seed gives the same timelines and shop, a different seed doesn't`,
       again.offers === offers1 && again.route === route1 && (other.route !== route1 || other.offers !== offers1), JSON.stringify({ route1, again, other }));
-    await startRun(page, 'OTHER9'); // a fresh run of that seed, from wave 1, for the full route
+    // A full route whose bonus plan has a bonus after the first mini-boss, both a chase and an escape, and a
+    // mini-boss with no bonus level.
+    const routeSeed = await page.evaluate(() => findSeed('ROUTE', TIMELINES, p => p[0] && p.includes('chase') && p.includes('escape') && p.includes(null)));
+    const plan = await page.evaluate(sd => bonusPlan(sd, TIMELINES), routeSeed);
+    console.log(`     route seed ${routeSeed}, bonus levels: ${plan.map(m => m ?? '-').join(' ')}`);
+    await startRun(page, routeSeed); // a fresh run from wave 1
 
     const route = await page.evaluate(() => scene().route.map(e => ({ id: e.id, name: e.name.toUpperCase(), road: e.road, mid: e.mid.key, boss: e.boss.key })));
-    for (const [stage, kind, key] of checkpointsFor(route)) {
+    for (const [stage, kind, key] of checkpointsFor(route, plan)) {
       if (kind === 'chase' || kind === 'escape') {
         const v = await page.evaluate(([n, mode]) => {
           // the bot's late-game build can kill each rider as it appears, so wait for the bonus level, not for riders
@@ -331,7 +368,14 @@ async function run(browser, name, options) {
         }, [stage, kind]);
         const want = { stage, bonus: kind, view: 'side', anim: `ride-${key}-${kind === 'chase' ? 'f' : 'b'}`, ground: true, road: false, shots: kind === 'chase' ? 1 : -1 };
         check(`${name}: after wave ${stage}, a bonus ${kind} in ${key}`, JSON.stringify(v) === JSON.stringify(want), JSON.stringify(v));
-        if (stage <= 10 || stage % 10 === 5) await shot(`5-wave-${stage}-bonus-${kind}-${key}`);
+        await shot(`5-wave-${stage}-bonus-${kind}-${key}`);
+      } else if (kind === 'noBonus') {
+        const v = await page.evaluate(n => {
+          __bot(`scene().stage === ${n} && (scene().bonus || app.state !== 'playing')`, 200);
+          return { stage: scene().stage, bonus: scene().bonus?.mode ?? null, state: app.state };
+        }, stage);
+        const want = stage === 50 ? 'choice' : 'shop';
+        check(`${name}: after wave ${stage}'s boss, no bonus level: straight to the ${want}`, v.stage === stage && v.bonus === null && v.state === want, JSON.stringify(v));
       } else if (kind === 'top') {
         const v = await page.evaluate(n => {
           __bot(`scene().stage === ${n} && app.state === 'playing'`, 200);
@@ -355,16 +399,16 @@ async function run(browser, name, options) {
         await page.evaluate(() => { __step(140); scene().boss?.clearTint(); }); // let it fly in; no white hit-flash in the picture
         await shot(`5-boss-stage-${stage}`);
         if (stage === 5) {
-          // (stop at the bonus level that follows, so the next checkpoint still sees it)
-          const hp = await page.evaluate(() => { scene().hp = 1; __bot(`scene().bonus`, 60); return { hp: scene().hp, max: scene().P.maxHp }; });
+          // (stop at the bonus level or shop that follows, so the next checkpoint still sees it)
+          const hp = await page.evaluate(() => { scene().hp = 1; __bot(`scene().bonus || app.state === 'shop'`, 60); return { hp: scene().hp, max: scene().P.maxHp }; });
           check(`${name}: mid-boss coffee heals fully`, hp.hp === hp.max, JSON.stringify(hp));
         }
       }
     }
 
-    // Wave 50's boss drops the 5th part; after the escape bonus level comes the choice. Go endless.
+    // Wave 50's boss drops the 5th part, then comes the choice. Go endless.
     const choice = await page.evaluate(() => { __bot(`app.state === 'choice'`, 200); return { state: app.state, parts: scene().parts }; });
-    check(`${name}: after wave 50 and its escape, the 5th part brings up the go-home-or-endless choice`, choice.state === 'choice' && choice.parts === 5 && (await visible(page, 'choice')), JSON.stringify(choice));
+    check(`${name}: after wave 50, the 5th part brings up the go-home-or-endless choice`, choice.state === 'choice' && choice.parts === 5 && (await visible(page, 'choice')), JSON.stringify(choice));
     await shot('7-choice');
     await page.click('#choice [data-action=endless]');
     const endless = await page.evaluate(() => {
@@ -385,7 +429,7 @@ async function run(browser, name, options) {
       s.stage = FINAL_STAGE;
       s.parts = TIMELINES - 1;
       s.collect(s.drop('part', s.player.x, s.player.y));
-      __bot(`app.state === 'choice'`, 120); // through the escape bonus level
+      __bot(`app.state === 'choice'`, 120);
       return app.state;
     });
     check(`${name}: the 5th part brings up the choice`, home === 'choice' && (await visible(page, 'choice')), home);

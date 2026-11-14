@@ -75,6 +75,7 @@ class Play extends Phaser.Scene {
     // the shop rolls don't shift them around.
     this.route = new Phaser.Math.RandomDataGenerator([`${app.seed}/route`]).shuffle(ERAS.slice()).slice(0, TIMELINES);
     this.endlessRng = new Phaser.Math.RandomDataGenerator([`${app.seed}/endless`]);
+    this.bonusRng = new Phaser.Math.RandomDataGenerator([`${app.seed}/bonus`]); // which mini-bosses lead into a bonus level
     this.stars = []; // Shuriken Ring
     Object.assign(this, {
       score: 0, coins: 0, owned: {}, combos: [], parts: 0, best: store.get(bestKey(), 0), newBest: false,
@@ -304,8 +305,8 @@ class Play extends Phaser.Scene {
 
   // ----- Run flow -----
   // Waves come in levels of 5, played back to back: a level card at the start, a quick "WAVE n" call between waves,
-  // and the 5th wave is a boss. After every level comes a bonus vehicle level (a chase after the mid-boss, an escape
-  // after the timeline boss), then the shop. (`this.stage` is the wave number, 1-50 and on into endless.)
+  // and the 5th wave is a boss. After every level comes the shop; a mini-boss level sometimes leads into a bonus
+  // vehicle level first (a chase or an escape). (`this.stage` is the wave number, 1-50 and on into endless.)
   // Timeline number n of this run (0-based): one of the 5 the seed picked, then in endless a seeded pick every
   // 10 stages, never the same one twice in a row.
   eraFor(n) {
@@ -398,7 +399,7 @@ class Play extends Phaser.Scene {
     this.time.delayedCall(800, () => { if (this.hp > 0) this.startStage(this.stage + 1); });
   }
 
-  // A level is done (its boss is down): every coin left flies to Vega, then the bonus vehicle level.
+  // A level is done (its boss is down): every coin left flies to Vega, then maybe a bonus level, then the shop.
   levelCleared() {
     this.waveActive = false;
     if (this.P.regen && this.hp > 0) this.hp = Math.min(this.hp + this.P.regen, this.P.maxHp); // Hearth Fire
@@ -409,8 +410,22 @@ class Play extends Phaser.Scene {
       for (const p of this.pickups.getChildren().slice()) this.collect(p);
       this.vacuum = false;
       this.enemyShots.clear(true, true);
-      this.startBonus(this.stage % STAGES_PER_ERA === 0 ? 'escape' : 'chase');
+      const mode = this.rollBonus();
+      if (mode) this.startBonus(mode);
+      else this.afterLevel();
     });
+  }
+
+  // Only a mini-boss level can lead into a bonus level, and only sometimes. Seeded: same seed, same bonus levels.
+  rollBonus() {
+    if (this.stage % STAGES_PER_ERA === 0) return null;
+    return this.bonusRng.frac() < BONUS_CHANCE ? this.bonusRng.pick(['chase', 'escape']) : null;
+  }
+
+  // The shop, or after wave 50 the go-home-or-endless choice.
+  afterLevel() {
+    if (this.stage === FINAL_STAGE && !this.endless) openChoice(this);
+    else openShop(this);
   }
 
   afterShop() {
@@ -443,7 +458,7 @@ class Play extends Phaser.Scene {
     this.addCoins(pay);
     jingle([523, 659, 784, 1046, 1318]);
     this.banner(`BONUS COMPLETE\n\n${b.caught} RIDERS\n+$${Math.floor(pay * this.P.coinMult)}`, 2400, 22);
-    this.time.delayedCall(2600, () => (this.stage === FINAL_STAGE && !this.endless ? openChoice(this) : openShop(this)));
+    this.time.delayedCall(2600, () => this.afterLevel());
   }
 
   spawnStage(s) {
@@ -672,8 +687,8 @@ class Play extends Phaser.Scene {
         this.time.delayedCall(90, () => this.explode(x, y, 60 * this.P.dynamite, 2 * this.dmgNow(), false, this.P.dynamiteBurns));
       }
       const roll = Math.random();
-      if (roll < 0.55) this.drop('coin', e.x, e.y);
-      else if (roll < 0.58) this.drop('donut', e.x, e.y); // rare: heals 1 HP
+      if (roll < COIN_CHANCE) this.drop('coin', e.x, e.y);
+      else if (roll < COIN_CHANCE + 0.03) this.drop('donut', e.x, e.y); // rare: heals 1 HP
     }
     e.destroy();
   }
@@ -739,7 +754,7 @@ class Play extends Phaser.Scene {
       this.addScore(2000);
       jingle([523, 659, 784, 1046]);
       this.banner(`GOT THE\n${this.E.part}!\n\nTIME DRIVE ${this.parts}/${TIMELINES}`, 2800);
-      // Then the escape bonus level: flee with the part (after the 5th part, the go-home-or-endless choice follows it).
+      // Then the shop and the next timeline (after the 5th part, the go-home-or-endless choice).
       this.time.delayedCall(3100, () => this.levelCleared());
     }
     this.updateHud();

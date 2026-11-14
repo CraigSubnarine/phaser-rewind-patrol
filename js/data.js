@@ -10,6 +10,8 @@ const STAGES_PER_ERA = 10;
 // where everything races right.
 const GROUND_Y = 430, BAND_TOP = 470, GROUND_SPEED = 300;
 const BONUS_TIME = 45000; // how long a bonus level lasts, in ms
+const BONUS_CHANCE = 0.5; // chance that a mini-boss level leads into a bonus level (chase or escape, 50/50)
+const COIN_CHANCE = 0.2; // chance that a defeated enemy drops a coin
 
 // Seven timelines. Each run's seed picks 5 of them, in a random order, for stages 1-50 (10 stages each). Stage 5 of
 // each has a mid-boss, stage 10 the timeline's boss, who holds one of the missing time-drive parts. Every stage opens

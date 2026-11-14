@@ -11,17 +11,20 @@ No build step and no asset files: the pixel art is drawn from text grids in the 
 
 ## How a run works
 
-- **30 stages:** 3 timelines (Rome 44 BC, England 1250, the Caribbean 1715) of 10 stages each, on a scrolling top-down road themed to each period. Every stage opens with a card naming the timeline, year and stage; a "time jump" plays between timelines.
-  - Stage 5 of each timeline: mid-boss (The Arena Champion, The Siege Engine, The Kraken), drops coffee (full heal) and coins.
-  - Stage 10: the timeline's boss (The Iron Centurion, Sir Grimhelm, Captain Blackpowder), drops a time-drive part.
-  - Stages 3 and 8: side-view vehicle stages on the timeline's ride (Rome: chariot, England: horse, Caribbean: rowboat). Stage 3 is a chase (riders ahead look back to shoot at you; you shoot ahead); stage 8 is an escape (riders behind chase you; you shoot backwards). Riders weave and try to ram you; rocks or barrels come at you from ahead and soak up shots.
+- **7 timelines, 5 per run:** Rome 44 BC, England 1250, the Caribbean 1715, the Wild West 1881, Feudal Japan 1600, Scandinavia 900 (Vikings) and the Stone Age. The run's seed picks 5 of them, in a random order, for **stages 1-50** (10 stages each), each on a scrolling top-down road themed to its period. Every stage opens with a card naming the timeline, year and stage; a "time jump" plays between timelines. Enemies and bosses get tougher with how far along you are, whichever timelines you got.
+  - Stage 5 of each timeline: mid-boss (Arena Champion, Siege Engine, Kraken, Gatling Wagon, Oni, Berserker, Woolly Mammoth), drops coffee (full heal) and coins.
+  - Stage 10: the timeline's boss (Iron Centurion, Sir Grimhelm, Captain Blackpowder, Colonel Rattler, Iron Shogun, Frost Giant, King Lizard), drops one of the 5 time-drive parts.
+  - Stages 3 and 8: side-view vehicle stages on the timeline's ride (chariot, horse, rowboat or longboat, raptor). Stage 3 is a chase (riders ahead look back to shoot at you; you shoot ahead); stage 8 is an escape (riders behind chase you; you shoot backwards). Riders weave and try to ram you; rocks, barrels, cacti or icebergs come at you from ahead and soak up shots.
   - Other stages: formations, snaking lines and dive-bombers, getting busier towards each boss (`STAGES`).
+- **After stage 50:** with all 5 parts, choose **Return to 1986** (the ending) or **Go endless**: the run keeps going with a new seeded timeline every 10 stages (never the same twice in a row), tougher each time; bosses drop coffee and coins instead of parts.
 - **Health:** 3 HP on Normal (5 on Easy). Donuts heal 1. When HP runs out, the run is over.
 - **Coins and the shop:** enemies drop coins. After every stage you visit that timeline's market: 4 cards (up to 2 pieces of that timeline's gear, the rest general gear), plus Reroll and Coffee (+1 HP). Prices rise 50% per copy you own.
-- **Upgrades** (`UPGRADES` in `js/data.js`): general gear (fire rate, damage, multi-shot, max HP, speed, coin magnet, crits, a backup partner) and timeline gear only sold in its own timeline (Rome: piercing, shield, full-HP damage; England: longbow, armor, boss damage; Caribbean: cannon, ricochet, more coins).
-- **Active items:** charge up as you defeat enemies, then fire with the item button. One at a time (buying another swaps it). Air Support (clear the screen), VCR Remote (skip the stage), Police Siren (freeze enemies), Testudo (invulnerable), Trebuchet Call (huge blast), Broadside (fan of cannonballs).
-- **Combos** (`COMBOS`): owning both halves unlocks a bonus, e.g. Pilum + Longbow = Volley Fire, Ship's Cannon + Ricochet = Skipping Shot, Testudo + Scutum = Shield Wall. Shop cards say which combo an item starts or completes.
-- **Seeds:** every run has a seed (shown on the story screen, pause menu and end screen; you can type your own). The same seed rolls the same shop offers.
+- **Upgrades** (`UPGRADES` in `js/data.js`, 39 in all): general gear (fire rate, damage, multi-shot, max HP, speed, coin magnet, crits, a backup partner) and timeline gear only sold in its own timeline:
+  - Rome: piercing, a recharging shield, full-HP damage. England: longbow, armor, boss damage. Caribbean: cannon, ricochet, more coins.
+  - Wild West: Six-Shooter fans, Dynamite (kills explode), Deadeye crits. Feudal Japan: Shuriken Ring (orbiting stars), Bushido (last-HP damage), Ninja Step. Scandinavia: Throwing Axes, Berserker Rage (faster when hurt), Hearth Fire (heal per stage). Stone Age: Fire (burning), Bone Boomerang, Mammoth Hide.
+- **Active items:** charge up as you defeat enemies, then fire with the item button. One at a time (buying another swaps it). Air Support (clear the screen), VCR Remote (skip the stage), Police Siren (freeze enemies), and one per timeline: Testudo, Trebuchet Call, Broadside, Stampede, Petal Storm, Thunder Hammer, Meteor Shower.
+- **Combos** (`COMBOS`, 21): owning both halves unlocks a bonus, e.g. Pilum + Longbow = Volley Fire, Dynamite + Ship's Cannon = Chain Reaction, Throwing Axes + Bone Boomerang = Returning Axes, Bushido + Berserker Rage = Last Stand. Since each run visits a different 5 timelines, which combos are even possible changes from run to run. Shop cards say which combo an item starts or completes.
+- **Seeds:** every run has a seed (shown on the story screen, pause menu and end screen; you can type your own). The same seed gives the same 5 timelines, the same endless timelines and the same shop offers. The pause menu shows the run's route.
 - Menu, story screen, settings (difficulty, sound), pause, game over and win screens. Best score kept per difficulty.
 
 ## Code layout
@@ -34,7 +37,7 @@ No build step and no asset files: the pixel art is drawn from text grids in the 
 
 ## Playtest
 
-`node tools/playtest.js` plays the game headlessly on a phone and a desktop screen: menus, pause, seeds, stage cards, the shop (buy, reroll, heal, combos, same-seed rolls), every active item, all 30 stages and 6 bosses, timeline changes, coffee, winning and game over. It saves screenshots to `playtest-output/` (git-ignored) and fails on any page error. It needs the `playwright-core` package; on this PC it's in the npx cache:
+`node tools/playtest.js` plays the game headlessly on a phone and a desktop screen: menus, pause, seeds (same route and shop), stage cards, the shop (buy, reroll, heal, combos), every active item, the later timelines' gear, all 50 stages of the seeded route (every vehicle stage, all 10 bosses, every timeline change), the stage-50 choice both ways (endless to stage 61, and home), and game over. It saves screenshots to `playtest-output/` (git-ignored) and fails on any page error. It needs the `playwright-core` package; on this PC it's in the npx cache:
 
 ```powershell
 $env:NODE_PATH = "$env:LOCALAPPDATA\npm-cache\_npx\e41f203b7505f1fb\node_modules"; node tools/playtest.js
@@ -43,7 +46,7 @@ $env:NODE_PATH = "$env:LOCALAPPDATA\npm-cache\_npx\e41f203b7505f1fb\node_modules
 ## Adding things
 
 - **An upgrade:** add an entry to `UPGRADES` (give it `era` to make it timeline gear, `active` to make it an active item and handle its `effect` in `useActive()`), and maybe a `COMBOS` entry pairing it with something from another timeline.
-- **A timeline:** add an entry to `ERAS` (name, year, road, colors, enemy and shot sprites, mid-boss and boss, part name), draw its art in `js/art.js` and its road in `makeRoads`, and give it some timeline gear.
+- **A timeline:** add an entry to `ERAS` (name, year, road, colors, enemy and shot sprites, mid-boss and boss, part name, vehicle, rider colors, sky, obstacle), draw its art in `js/art.js`, its road in `makeRoads` and its side-view scenery in `makeSides`, and give it some timeline gear. It joins the pool the seed picks from automatically.
 
 ## Lessons
 

@@ -112,7 +112,8 @@ function pauseGame() {
   app.state = 'paused';
   scene().sys.pause();
   $('pauseBtn').hidden = true;
-  $('pauseBuild').textContent = `${buildText(scene())} Seed ${app.seed}.`;
+  const s = scene();
+  $('pauseBuild').textContent = `${buildText(s)} Route: ${s.route.slice(0, TIMELINES).map(e => e.name).join(' > ')}. Seed ${app.seed}.`;
   showScreen('pause');
 }
 function resumeGame() {
@@ -133,12 +134,34 @@ function openSettings() {
 function endGame(won, s) {
   app.state = won ? 'won' : 'over';
   $('pauseBtn').hidden = true;
-  const era = ERAS[s.era];
+  const era = s.E;
   $('endTitle').textContent = won ? 'CASE CLOSED' : 'GAME OVER';
-  $('endText').textContent = (won ? 'Officer Vega is back in 1986, time drive fixed.' : `Stranded in ${era.name}, ${era.year}, on stage ${s.stage}.`)
+  $('endText').textContent = (won ? 'Officer Vega is back in 1986, time drive fixed.'
+    : s.endless ? `Lost in time: ${era.name}, ${era.year}, endless stage ${s.stage}.` : `Stranded in ${era.name}, ${era.year}, on stage ${s.stage}.`)
     + ` Score ${s.score}.` + (s.newBest ? ' New best!' : '');
   $('endBuild').textContent = `${buildText(s)} Seed ${app.seed}.`;
   showScreen('end');
+}
+
+// ---------- After stage 50's part: go home (the ending) or keep going in endless ----------
+function openChoice(s) {
+  app.state = 'choice';
+  s.sys.pause();
+  $('pauseBtn').hidden = true;
+  showScreen('choice');
+}
+function choose(endless) {
+  const s = scene();
+  s.sys.resume();
+  app.state = 'playing';
+  showScreen(null);
+  $('pauseBtn').hidden = false;
+  document.activeElement?.blur();
+  if (!endless) return s.victory();
+  s.endless = true;
+  s.updateHud();
+  s.banner('ENDLESS\nPATROL', 1600, 26);
+  s.stageCleared(); // shop, then stage 51 in a new timeline
 }
 
 // ---------- Shop: between every stage ----------
@@ -160,7 +183,7 @@ function comboHint(u, owned) {
 // Card text comes only from the game's own data (no player input), so innerHTML is safe here.
 function renderShop() {
   const s = scene(), shop = app.shop, coins = Math.floor(s.coins);
-  $('shopTitle').textContent = `${ERAS[s.era].name.toUpperCase()} MARKET`;
+  $('shopTitle').textContent = `${s.E.name.toUpperCase()} MARKET`;
   $('shopCoins').textContent = `$${coins}  HP ${s.hp}/${s.P.maxHp}`;
   $('shopItems').replaceChildren(...shop.offers.map((u, i) => {
     const b = document.createElement('button'), cost = priceOf(u, s.owned), have = s.owned[u.id] || 0, sold = shop.sold.has(i);
@@ -235,6 +258,8 @@ $('ui').addEventListener('click', e => {
   else if (action === 'reroll') shopReroll();
   else if (action === 'heal') shopHeal();
   else if (action === 'continue') closeShop();
+  else if (action === 'home') choose(false);
+  else if (action === 'endless') choose(true);
 });
 $('pauseBtn').addEventListener('click', pauseGame);
 $('itemBtn').addEventListener('click', () => scene()?.useActive());

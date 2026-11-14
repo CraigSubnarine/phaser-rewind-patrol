@@ -60,6 +60,59 @@ const ART = {
   spark: ['11', '11'],
   streak: ['1', '1', '1', '1'],
 };
+// The four later timelines: armies, shots, mid-bosses and bosses.
+Object.assign(ART, {
+  outlaw: ['....7777....', '...777777...', '.7777777777.', '...888888...', '...808808...', '...222222...',
+           '..D4DDDD4D..', '.8DDDDDDDD8.', '.8D9DDDD9D8.', '..99999999..', '...9....9...', '...7....7...'],
+  ninja: ['....9999....', '...999999...', '..99999999..', '..99808099..', '..99999999..', '...999999...',
+          '..99999999..', '.9999EE9999.', '.9999999999.', '..99999999..', '...99..99...', '...99..99...'],
+  viking: ['.1........1.', '.11.6666.11.', '..16666661..', '...666666...', '...808808...', '..DDD88DDD..',
+           '..DDDDDDDD..', '.77DDDDDD77.', '.7777777777.', '..77777777..', '...55..55...', '...77..77...'],
+  caveman: ['..77777777..', '.7777777777.', '.7788888877.', '..80888808..', '..88888888..', '..87777778..',
+            '.8DDDDDDDD8.', '.8DD7DD7DD8.', '..DDDDDDDD..', '..D7DDDD7D..', '...88..88...', '...88..88...'],
+  bullet: ['.4.', '444', '444', '.6.'],
+  shuriken: ['..6..', '.666.', '66066', '.666.', '..6..'],
+  axe: ['..7..', '..7..', '..7..', '66666', '.666.'],
+  stone: ['.555.', '55755', '55555', '57555', '.555.'],
+  gatling: ['.......555555.......', '......55000055......', '......50500505......', '......55000055......',
+            '.......555555.......', '........5555........', '..DDDDDDDDDDDDDDDD..', '..D77777777777777D..',
+            '..D77777777777777D..', '..DDDDDDDDDDDDDDDD..', '777..............777', '7.7..............7.7',
+            '777..............777'],
+  rattler: ['.......000000.......', '......00000000......', '......00000000......', '......04444440......',
+            '00000000000000000000', '....888888888888....', '....880088880088....', '....888888888888....',
+            '....888887788888....', '....877777777778....', '....888800008888....', '.....8888888888.....',
+            '...22222222222222...', '..9999999999999999..', '.999999999999999999.'],
+  oni: ['..1..............1..', '..11............11..', '...11222222222211...', '....222222222222....',
+        '...22222222222222...', '...22444222244422...', '...22404222240422...', '...22222222222222...',
+        '...22222277222222...', '...22000000000022...', '...22010101010122...', '....222222222222....',
+        '.....2222222222.....'],
+  shogun: ['..4..............4..', '...4............4...', '....4..........4....', '.....4444444444.....',
+           '....999999999999....', '..9999999999999999..', '.999999999999999999.', '....EEEEEEEEEEEE....',
+           '....EE00EEEE00EE....', '....EEEEEEEEEEEE....', '....EE11111111EE....', '.....EEEEEEEEEE.....',
+           '..E9E9E9E9E9E9E9E9..', '.999999999999999999.'],
+  berserker: ['....DDDDDDDDDDDD....', '..DDDDDDDDDDDDDDDD..', '.DDD888888888888DDD.', '.DD88888888888888DD.',
+              '.DD83300888800338DD.', '.DD88888888888888DD.', '.DD88888877888888DD.', '.DDDDDDDDDDDDDDDDDD.',
+              '..DDDDD000000DDDDD..', '...DDDDDDDDDDDDDD...', '....DD.DDDDDD.DD....', '....DD..DDDD..DD....',
+              '....44...44...44....'],
+  frostgiant: ['...1...1....1...1...', '...11.111..111.11...', '..1111111111111111..', '..3333333333333333..',
+               '.333333333333333333.', '.333110033331100333.', '.333333333333333333.', '.333333336633333333.',
+               '.311111111111111113.', '..1111100000011111..', '..1111111111111111..', '...11111111111111...',
+               '....111111111111....', '.....1111111111.....', '.......111111.......'],
+  mammoth: ['....DDDDDDDDDDDD....', '..DDDDDDDDDDDDDDDD..', '.DDDDDDDDDDDDDDDDDD.', 'DDDDD00DDDDDD00DDDDD',
+            'DDDDDDDDDDDDDDDDDDDD', 'DDDDDDDDDDDDDDDDDDDD', '1.DDDDDDDDDDDDDDDD.1', '.1..DDDDDDDDDDDD..1.',
+            '..1....DDDDDD....1..', '...11...DDDD...11...', '........DDDD........', '.........DDD........',
+            '..........DD........'],
+  trex: ['.....CCCCCCCCCC.....', '...CCCCCCCCCCCCCC...', '..CCCCCCCCCCCCCCCC..', '..CC44CCCCCCCC44CC..',
+         '..CC40CCCCCCCC40CC..', '..CCCCCCCCCCCCCCCC..', '..CCC0CCCCCCCC0CCC..', '..CCCCCCCCCCCCCCCC..',
+         '..C00000000000000C..', '..C01010101010101C..', '..C00000000000000C..', '..C10101010101010C..',
+         '..CCCCCCCCCCCCCCCC..', '...CCCCCCCCCCCCCC...'],
+  // Vehicle-stage obstacles, the Stampede's cattle, and the Bone Boomerang
+  cactus: ['...CC...', '...CC...', '.C.CC...', '.C.CC.C.', '.CCCC.C.', '...CCCC.', '...CC...', '...CC...', '...CC...', '...CC...'],
+  iceberg: ['...1111...', '..111111..', '.11BB1111.', '1111111B11', '1B11111111', '.11111111.'],
+  bull: ['1........1', '11......11', '.17777771.', '..777777..', '..707707..', '..777777..', '...7777...', '...7887...', '....88....'],
+  boomerang: ['1.....1', '11...11', '.11.11.', '..111..'],
+});
+
 // Officer Vega seen from directly above, facing up: pistol held out front in both hands, arms, shoulders,
 // and the police cap (black brim, gold badge). The feet are added separately so they can step.
 const VEGA = [
@@ -97,7 +150,9 @@ ART.partner = ART.vega0.map(row => row.replace(/G/g, 'D').replace(/9/g, '7'));
 
 const PIXEL = {
   vega0: 5, vega1: 5, vega2: 5, partner: 3, champion: 6, siege: 6, kraken: 6, centurion: 6, grimhelm: 6, blackpowder: 6,
+  gatling: 6, rattler: 6, oni: 6, shogun: 6, berserker: 6, frostgiant: 6, mammoth: 6, trex: 6,
   spear: 3, arrow: 3, cannonball: 3, ink: 3, orb: 3, laser: 3, arrowUp: 3, coin: 3, spark: 2, streak: 2,
+  bullet: 3, shuriken: 3, axe: 3, stone: 3,
 };
 
 // ---------- Side view (vehicle stages): riders on era vehicles, all facing right ----------
@@ -128,11 +183,18 @@ const CART = ['4444444444', '4EEEEEEEE4', '4EEEEEEEE4', '4444444444'];
 const HULL = ['D......................D', 'DD....................DD', 'DDDDDDDDDDDDDDDDDDDDDDDD', '.7777777777777777777777.',
   '..DDDDDDDDDDDDDDDDDDDD..', '....77777777777777777...'];
 const WAKE = ['.1..1..1..1..1..1..1..1.', '1..1..1..1..1..1..1..1..'];
+const RAPTOR_TOP = ['..............CCC...', '.............CCCCC..', '.............CC0CCC.', '.............CCCCCCC', '............CCC.1.1.',
+  'C..........CCC......', '.CC.....CCCCC.......', '..CCCCCCCCCCC.......', '....CCCCCCCC........'];
+const RAPTOR = [ // a running raptor for the Stone Age: legs apart, then together
+  [...RAPTOR_TOP, '.....CC..CC.........', '....CC....CC........', '...00......00.......'],
+  [...RAPTOR_TOP, '......CCCC..........', '......C..C..........', '.....00..00.........'],
+];
 // Each vehicle: a function turning (rider, frame) into one composed sprite.
 const VEHICLES = {
   horse: (rider, f) => compose(20, 20, [[HORSE[f], 0, 7], [rider, 6, 3]]),
   chariot: (rider, f) => compose(28, 20, [[HORSE[f], 8, 7], [rider, 1, 3], [CART, 0, 10], [WHEEL[f], 2, 13]]),
   boat: (rider, f) => compose(24, 15, [[rider, 8, 0], [[...HULL, WAKE[f]], 0, 8]]),
+  raptor: (rider, f) => compose(20, 19, [[RAPTOR[f], 0, 7], [rider, 6, 4]]),
 };
 // Riders for every timeline: Vega facing forward ('f') and looking back ('b'), and that timeline's enemy, both ways.
 function makeRiders(eras) {
@@ -209,6 +271,56 @@ function makeSides(scene) {
     g.fillStyle(0x0d4a6e).fillRect(0, 0, 256, 470);
     for (let i = 0; i < 70; i++) g.fillStyle(rnd.pick([0x2f7fa8, 0x1b5f86])).fillRect(rnd.between(0, 230), rnd.between(0, 465), rnd.between(12, 26), 3);
   });
+  // The Wild West: flat-topped mesas and a cactus, a dusty trail
+  make('hills-west', 512, 220, g => {
+    g.fillStyle(0xa0522d).fillRect(40, 110, 150, 110).fillTriangle(10, 220, 40, 110, 40, 220).fillTriangle(190, 110, 220, 220, 190, 220);
+    g.fillRect(300, 140, 110, 80).fillTriangle(280, 220, 300, 140, 300, 220).fillTriangle(410, 140, 430, 220, 410, 220);
+    g.fillStyle(0x3f6a35).fillRect(470, 150, 10, 70).fillRect(458, 168, 12, 6).fillRect(458, 156, 6, 14);
+  });
+  make('ground-west', 256, 470, (g, rnd) => {
+    g.fillStyle(0xc8a064).fillRect(0, 0, 256, 470);
+    g.fillStyle(0xa87c48).fillRect(0, 40, 256, 390);
+    g.fillStyle(0x8a6234).fillRect(0, 150, 256, 12).fillRect(0, 300, 256, 12);
+    for (let i = 0; i < 50; i++) g.fillStyle(rnd.pick([0xb08a50, 0xd8b478])).fillRect(rnd.between(0, 250), rnd.between(0, 465), 5, 3);
+  });
+  // Feudal Japan: a pagoda and blossom trees on dark hills, a stone path
+  make('hills-japan', 512, 220, g => {
+    hills(g, 0x4a3a5a, 5);
+    g.fillStyle(0x2a2030);
+    for (let i = 0; i < 4; i++) g.fillRect(330 + i * 8, 190 - i * 34, 60 - i * 16, 24).fillTriangle(316 + i * 8, 190 - i * 34, 404 - i * 8, 190 - i * 34, 360, 176 - i * 34);
+    g.fillStyle(0xffb7d5).fillCircle(120, 150, 26).fillCircle(150, 140, 22).fillCircle(470, 160, 24);
+  });
+  make('ground-japan', 256, 470, (g, rnd) => {
+    g.fillStyle(0x3a5a3a).fillRect(0, 0, 256, 470);
+    g.fillStyle(0x6a6a5e).fillRect(0, 40, 256, 390);
+    for (let y = 40; y < 430; y += 65) for (let x = 0; x < 256; x += 64) g.fillStyle(rnd.pick([0x9a9a8a, 0xa4a494, 0x8e8e7e])).fillRect(x + 3, y + 3, 58, 59);
+    for (let i = 0; i < 30; i++) g.fillStyle(0xffb7d5).fillRect(rnd.between(0, 250), rnd.between(0, 465), 4, 4);
+  });
+  // Scandinavia: snowy mountains and a longhouse, an icy sea
+  make('hills-norse', 512, 220, g => {
+    for (const [x, w, h] of [[0, 220, 170], [170, 200, 130], [330, 240, 190]]) {
+      g.fillStyle(0x6a7a8a).fillTriangle(x, 220, x + w / 2, 220 - h, x + w, 220);
+      g.fillStyle(0xf4f8fb).fillTriangle(x + w / 2 - w / 8, 220 - h * 0.75, x + w / 2, 220 - h, x + w / 2 + w / 8, 220 - h * 0.75);
+    }
+    g.fillStyle(0x6b3e1f).fillRect(220, 180, 90, 40).fillStyle(0x4a2f17).fillTriangle(212, 182, 318, 182, 265, 150);
+  });
+  make('ground-norse', 256, 470, (g, rnd) => {
+    g.fillStyle(0x2a4a62).fillRect(0, 0, 256, 470);
+    for (let i = 0; i < 18; i++) g.fillStyle(rnd.pick([0xcfe0ea, 0xa8c4d4])).fillEllipse(rnd.between(20, 236), rnd.between(10, 460), rnd.between(20, 40), rnd.between(8, 14));
+    for (let i = 0; i < 40; i++) g.fillStyle(0x3d6582).fillRect(rnd.between(0, 230), rnd.between(0, 465), rnd.between(12, 24), 3);
+  });
+  // The Stone Age: a smoking volcano and ferns, a jungle track
+  make('hills-stone', 512, 220, g => {
+    g.fillStyle(0x5a3a2a).fillTriangle(180, 220, 300, 60, 420, 220);
+    g.fillStyle(0xff5a2a).fillTriangle(280, 86, 300, 60, 320, 86);
+    g.fillStyle(0x7d7d8c).fillCircle(300, 40, 18).fillCircle(318, 22, 14).fillCircle(336, 10, 10);
+    g.fillStyle(0x2e6b2e).fillTriangle(40, 220, 70, 150, 100, 220).fillTriangle(450, 220, 480, 160, 510, 220);
+  });
+  make('ground-stone', 256, 470, (g, rnd) => {
+    g.fillStyle(0x2e6b2e).fillRect(0, 0, 256, 470);
+    g.fillStyle(0x8a6a3e).fillRect(0, 40, 256, 390);
+    for (let i = 0; i < 50; i++) g.fillStyle(0x6a4c28).fillRect(rnd.between(0, 250), rnd.between(46, 420), 5, 4);
+  });
 }
 
 // ---------- Roads: one top-down tile per timeline, scrolled under Vega. ----------
@@ -258,5 +370,42 @@ function makeRoads(scene) {
       g.fillStyle(0x3b2614).fillRect(L + 12, y + 14, 4, 4).fillRect(R - 16, y + 14, 4, 4); // nails
     }
     for (let y = 0; y < TILE; y += 128) g.fillStyle(0x4a2f17).fillRect(L - 14, y + 40, 14, 20).fillRect(R, y + 40, 14, 20); // posts
+  });
+  make('road-west', (g, rnd) => { // dusty trail with wagon ruts between cacti
+    g.fillStyle(0xc8a064).fillRect(0, 0, W, TILE);
+    for (let i = 0; i < 50; i++) g.fillStyle(rnd.pick([0xb08a50, 0xd8b478])).fillRect(rnd.between(0, W - 4), rnd.between(0, TILE - 4), 4, 3);
+    g.fillStyle(0xa87c48).fillRect(L, 0, R - L, TILE);
+    for (let y = 0; y < TILE; y += 16) g.fillRect(L - rnd.between(0, 10), y, 10, 16).fillRect(R + rnd.between(0, 10) - 10, y, 10, 16);
+    g.fillStyle(0x8a6234).fillRect(L + 90, 0, 12, TILE).fillRect(R - 102, 0, 12, TILE);
+    for (const [x, y] of [[44, 40], [536, 170]]) { // saguaro cacti
+      g.fillStyle(0x3f7a35).fillRect(x, y, 14, 62).fillRect(x - 14, y + 20, 14, 8).fillRect(x - 14, y + 6, 8, 18).fillRect(x + 14, y + 28, 14, 8).fillRect(x + 20, y + 14, 8, 18);
+    }
+  });
+  make('road-japan', (g, rnd) => { // stone-slab temple path through moss and fallen cherry petals, with stone lanterns
+    g.fillStyle(0x3a5a3a).fillRect(0, 0, W, TILE);
+    for (let i = 0; i < 70; i++) g.fillStyle(rnd.pick([0xffb7d5, 0x2e4a2e, 0xffd6e6])).fillRect(rnd.between(0, W - 4), rnd.between(0, TILE - 4), 4, 4);
+    g.fillStyle(0x6a6a5e).fillRect(L, 0, R - L, TILE);
+    for (let y = 0; y < TILE; y += 64) for (let x = L; x < R; x += 60) g.fillStyle(rnd.pick([0x9a9a8a, 0xa4a494, 0x8e8e7e])).fillRect(x + 3, y + 3, Math.min(60, R - x) - 6, 58);
+    for (let y = 0; y < TILE; y += 128) g.fillStyle(0x8e8e86).fillRect(L - 40, y + 30, 24, 30).fillRect(L - 46, y + 24, 36, 8).fillRect(R + 16, y + 30, 24, 30).fillRect(R + 10, y + 24, 36, 8);
+  });
+  make('road-norse', (g, rnd) => { // icy track along a snowy coast
+    g.fillStyle(0xdde8f0).fillRect(0, 0, W, TILE);
+    for (let i = 0; i < 50; i++) g.fillStyle(0xb8c8d8).fillRect(rnd.between(0, W - 6), rnd.between(0, TILE - 4), 6, 3);
+    g.fillStyle(0x9fb4c4).fillRect(L, 0, R - L, TILE);
+    for (let i = 0; i < 14; i++) { // cracks in the ice
+      const x = rnd.between(L + 10, R - 60), y = rnd.between(0, TILE - 20);
+      g.fillStyle(0x7f94a4).fillRect(x, y, rnd.between(20, 50), 2).fillRect(x + 10, y, 2, rnd.between(8, 18));
+    }
+    g.fillStyle(0xf4f8fb).fillRect(L - 12, 0, 12, TILE).fillRect(R, 0, 12, TILE); // snowbanks
+  });
+  make('road-stone', (g, rnd) => { // dirt track through ferns
+    g.fillStyle(0x2e6b2e).fillRect(0, 0, W, TILE);
+    for (let i = 0; i < 26; i++) {
+      const x = rnd.pick([rnd.between(4, L - 30), rnd.between(R + 4, W - 30)]), y = rnd.between(10, TILE - 30);
+      g.fillStyle(rnd.pick([0x3f8a3f, 0x24561f])).fillTriangle(x, y + 24, x + 13, y, x + 26, y + 24);
+    }
+    g.fillStyle(0x8a6a3e).fillRect(L, 0, R - L, TILE);
+    for (let y = 0; y < TILE; y += 16) g.fillRect(L - rnd.between(0, 10), y, 10, 16).fillRect(R + rnd.between(0, 10) - 10, y, 10, 16);
+    for (let i = 0; i < 40; i++) g.fillStyle(0x6a4c28).fillRect(rnd.between(L + 6, R - 10), rnd.between(0, TILE - 4), 5, 4);
   });
 }

@@ -26,8 +26,8 @@ function installHarness() {
       const s = scene();
       s.invulnUntil = Infinity;
       const targets = s.boss ? [s.boss] : s.enemies.getChildren().filter(e => e.y > 0);
-      const tgt = targets.sort((a, b) => Math.abs(a.x - s.ship.x) - Math.abs(b.x - s.ship.x))[0];
-      if (tgt && s.ship.active) s.placeShip(s.ship.x + Phaser.Math.Clamp(tgt.x - s.ship.x, -6, 6), H - 110);
+      const tgt = targets.sort((a, b) => Math.abs(a.x - s.player.x) - Math.abs(b.x - s.player.x))[0];
+      if (tgt && s.player.active) s.placePlayer(s.player.x + Phaser.Math.Clamp(tgt.x - s.player.x, -6, 6), H - 110);
       __step(1);
     }
     return until();
@@ -41,7 +41,7 @@ async function run(browser, name, options) {
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  page.on('console', m => { if (m.type() === 'error') errors.push(`${m.text()} ${m.location()?.url ?? ''}`.trim()); });
   const shot = file => page.screenshot({ path: path.join(out, `${name}-${file}.png`) });
 
   await page.goto(url);
@@ -63,6 +63,18 @@ async function run(browser, name, options) {
   await page.click('#pause .primary');
   check(`${name}: resume`, await page.evaluate(() => app.state === 'playing'));
 
+  const walk = await page.evaluate(() => {
+    const s = scene(), seen = new Set();
+    s.invulnUntil = Infinity;
+    for (let i = 0; i < 40; i++) { s.placePlayer(s.player.x + (i < 20 ? 3 : -3), s.player.y); __step(1); seen.add(s.player.texture.key); }
+    const walking = s.player.anims.isPlaying;
+    __step(30);
+    s.invulnUntil = 0;
+    return { frames: [...seen].sort().join(','), walking, standing: !s.player.anims.isPlaying && s.player.texture.key === 'vega0' };
+  });
+  check(`${name}: feet step while moving, come together when stopped`,
+    walk.walking && walk.standing && walk.frames === 'vega0,vega1,vega2', JSON.stringify(walk));
+
   if (name === 'phone') {
     for (let era = 0; era < 3; era++) {
       const reached = await page.evaluate(e => __bot(`scene().era === ${e} && scene().boss?.ready`, 300), era);
@@ -80,13 +92,30 @@ async function run(browser, name, options) {
   // Lose every life: game over screen
   await page.evaluate(() => {
     const s = scene();
-    while (s.lives > 0) { s.invulnUntil = 0; s.hitShip(); __step(70); }
+    while (s.lives > 0) { s.invulnUntil = 0; s.hitPlayer(); __step(70); }
     __step(90);
   });
   check(`${name}: game over screen`, (await visible(page, 'end')) && (await page.textContent('#endTitle')) === 'GAME OVER');
   await shot('5-game-over');
   await page.click('#end button:not(.primary)');
   check(`${name}: back to main menu`, await visible(page, 'main'));
+
+  if (name === 'phone') { // sprite sheet: every texture at 2x, for checking the pixel art
+    await page.evaluate(() => {
+      const sheet = document.createElement('div');
+      sheet.style.cssText = 'position:fixed;inset:0;z-index:9;background:#140a26;display:flex;flex-wrap:wrap;gap:14px;padding:14px;align-content:flex-start';
+      for (const key of Object.keys(ART).sort((a, b) => b.startsWith('vega') - a.startsWith('vega'))) { // player first
+        const img = new Image();
+        img.onload = () => { img.width = img.naturalWidth * 2; };
+        img.style.imageRendering = 'pixelated';
+        img.src = game.textures.getBase64(key);
+        sheet.append(img);
+      }
+      document.body.append(sheet);
+    });
+    await page.waitForTimeout(300);
+    await shot('6-sprites');
+  }
 
   check(`${name}: no page errors`, errors.length === 0, errors.join(' | '));
   await ctx.close();

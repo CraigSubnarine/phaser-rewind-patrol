@@ -58,10 +58,10 @@
 
   <section class="screen story" id="story" hidden>
     <h2>NEON CITY, 1986</h2>
-    <p>Officer Vega answers a break-in call at Chronotech Labs. One blinding flash later, Vega's patrol cruiser is hovering over ancient Rome, fused with the lab's prototype time drive.</p>
-    <p>The drive is busted. Its three missing parts are scattered through history, and every army that spots a flying police car wants it gone.</p>
-    <p>Fight through them, recover the parts, and get back to 1986.</p>
-    <p class="hint">Drag anywhere to steer (mouse or arrow keys on a computer). Your cruiser fires on its own. Gold badges power up your gun; donuts are bonus points.</p>
+    <p>Officer Vega answers a break-in call at Chronotech Labs and grabs the strange device on the workbench. One blinding flash later, Vega is standing in ancient Rome with the lab's prototype time drive clipped to the duty belt.</p>
+    <p>The drive is busted. Its three missing parts are scattered through history, and every army that spots a time-traveling cop wants Vega gone.</p>
+    <p>Fight through them on foot, recover the parts, and get back to 1986.</p>
+    <p class="hint">Drag anywhere to move (mouse or arrow keys on a computer). Vega fires automatically. Gold badges power up your gun; donuts are bonus points.</p>
     <button class="primary" data-action="start">Start patrol</button>
   </section>
 
@@ -103,10 +103,9 @@ const FONT = '"Press Start 2P", monospace';
 const PAL = {
   0: '#000000', 1: '#ffffff', 2: '#ff3b3b', 3: '#3b7bff', 4: '#ffd23b', 5: '#7d7d8c', 6: '#c8c8d4', 7: '#6b3e1f',
   8: '#f0b98a', 9: '#1b1b2f', A: '#ff4fd8', B: '#4ff0ff', C: '#2e8b3a', D: '#b5651d', E: '#8a1c1c', F: '#4b4b63',
+  G: '#3a56d4',
 };
 const ART = {
-  cruiser: ['...4....4...', '..33333333..', '.6333333336.', '.6333333336.', '..1BBBBBB1..', '..11111111..', '..13332221..',
-            '..11111111..', '..1BBBBBB1..', '.6333333336.', '.6333333336.', '..23333332..', '...A....A...', '...A....A...'],
   legionary: ['.....22.....', '....2222....', '...444444...', '..44888844..', '...408804...', '....8888....',
               '..E222222E..', '.4E222222E4.', '.4422222244.', '..22444422..', '...7....7...', '...7....7...'],
   knight: ['.....33.....', '....6666....', '...666666...', '..66666666..', '..60000006..', '..66666666..',
@@ -138,7 +137,40 @@ const ART = {
   spark: ['11', '11'],
   streak: ['1', '1', '1', '1'],
 };
-const PIXEL = { centurion: 6, grimhelm: 6, blackpowder: 6, spear: 3, arrow: 3, cannonball: 3, orb: 3, laser: 3, spark: 2, streak: 2 };
+// Officer Vega seen from directly above, facing up: pistol held out front in both hands, arms, shoulders,
+// and the police cap (black brim, gold badge). The feet are added separately so they can step.
+const VEGA = [
+  '......55......',
+  '......55......',
+  '......55......',
+  '.....8888.....',
+  '.....G..G.....',
+  '.....G..G.....',
+  '.....G..G.....',
+  '..GGGGGGGGGG..',
+  '.GGGG0000GGGG.',
+  '.GGG994499GGG.',
+  '.GGG999999GGG.',
+  '.GGGG9999GGGG.',
+  '..GGGGGGGGGG..',
+  '...GGGGGGGG...',
+  '..............',
+  '..............',
+];
+// Put a 2x3 shoe at each [column, row]. Feet are under the body, so they only show where the body isn't.
+const withFeet = feet => {
+  const grid = VEGA.map(row => [...row]);
+  for (const [c, r] of feet) {
+    for (let y = 0; y < 3; y++) for (let x = 0; x < 2; x++) if (grid[r + y][c + x] === '.') grid[r + y][c + x] = '6';
+  }
+  return grid.map(row => row.join(''));
+};
+// Standing: just the toes poke out in front. Walking: one whole foot out front, the other's heel behind.
+ART.vega0 = withFeet([[3, 5], [9, 5]]);
+ART.vega1 = withFeet([[3, 2], [9, 13]]);
+ART.vega2 = withFeet([[3, 13], [9, 2]]);
+
+const PIXEL = { vega0: 5, vega1: 5, vega2: 5, centurion: 6, grimhelm: 6, blackpowder: 6, spear: 3, arrow: 3, cannonball: 3, orb: 3, laser: 3, spark: 2, streak: 2 };
 
 // ---------- The story: each era has its own army, enemy shot, boss and missing time-drive part. ----------
 const ERAS = [
@@ -293,7 +325,7 @@ addEventListener('keydown', e => {
 // Switching apps or tabs mid-game opens the pause menu.
 document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
 
-// Steering listens on the whole page, so a thumb anywhere (even below the game) can drag the cruiser.
+// Steering listens on the whole page, so a thumb anywhere (even below the game) can move Vega.
 let drag = null;
 addEventListener('pointerdown', e => {
   if (e.target.closest?.('button, a, label')) return; // taps on menu controls aren't game input
@@ -309,8 +341,9 @@ class Play extends Phaser.Scene {
 
   create(data) {
     this.playing = !!data?.play;
-    if (!this.textures.exists('cruiser')) {
+    if (!this.textures.exists('vega0')) { // textures and animations are shared by every restart, so make them once
       for (const [key, rows] of Object.entries(ART)) this.textures.generate(key, { data: rows, pixelWidth: PIXEL[key] ?? 4, palette: PAL });
+      this.anims.create({ key: 'walk', frames: ['vega1', 'vega0', 'vega2', 'vega0'].map(key => ({ key })), frameRate: 10, repeat: -1 });
     }
     this.diff = DIFFICULTY[settings.difficulty];
     this.t = 0; // game time that stops while paused (update() isn't called then)
@@ -323,15 +356,16 @@ class Play extends Phaser.Scene {
     });
     this.setLook(0x140a26, 0xff4fd8);
 
-    this.ship = this.physics.add.image(W / 2, H - 110, 'cruiser').setDepth(2);
-    this.ship.body.setSize(26, 40); // forgiving hitbox, smaller than the car
+    this.player = this.physics.add.sprite(W / 2, H - 110, 'vega0').setDepth(2);
+    this.player.body.setSize(30, 30, false).setOffset(20, 38); // forgiving hitbox: just the shoulders and cap
+    Object.assign(this, { lastX: this.player.x, lastY: this.player.y, lastMoveT: -1000 });
     this.sparks = this.add.particles(0, 0, 'spark', {
       speed: { min: 60, max: 280 }, lifespan: { min: 250, max: 650 }, scale: { start: 1.4, end: 0 },
       tint: [0xffffff, 0xffd23b, 0xff4fd8, 0x4ff0ff], emitting: false,
     }).setDepth(3);
 
-    if (!this.playing) { // main-menu backdrop: the cruiser just hovers
-      this.tweens.add({ targets: this.ship, y: H - 140, duration: 1300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    if (!this.playing) { // main-menu backdrop: Vega walks in place under the passing time streaks
+      this.player.play('walk');
       return;
     }
 
@@ -340,9 +374,9 @@ class Play extends Phaser.Scene {
     this.enemies = this.physics.add.group();
     this.pickups = this.physics.add.group();
     this.physics.add.overlap(this.bullets, this.enemies, (b, e) => this.hitEnemy(b, e));
-    this.physics.add.overlap(this.ship, this.enemyShots, (s, shot) => { if (this.hitShip()) shot.destroy(); });
-    this.physics.add.overlap(this.ship, this.enemies, (s, e) => { if (this.hitShip()) this.killEnemy(e, false); });
-    this.physics.add.overlap(this.ship, this.pickups, (s, p) => this.collect(p));
+    this.physics.add.overlap(this.player, this.enemyShots, (s, shot) => { if (this.hitPlayer()) shot.destroy(); });
+    this.physics.add.overlap(this.player, this.enemies, (s, e) => { if (this.hitPlayer()) this.killEnemy(e, false); });
+    this.physics.add.overlap(this.player, this.pickups, (s, p) => this.collect(p));
 
     // false = don't swallow these keys, so the menus keep working with the keyboard.
     this.keys = this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S', false);
@@ -450,7 +484,7 @@ class Play extends Phaser.Scene {
     this.tweens.add({ targets: b, y: 180, duration: 2200, ease: 'Sine.easeOut', onComplete: () => { b.ready = true; b.readyAt = this.t; } });
     this.bossColliders = [
       this.physics.add.overlap(b, this.bullets, (boss, bullet) => this.hitBoss(bullet)),
-      this.physics.add.overlap(this.ship, b, () => this.hitShip()),
+      this.physics.add.overlap(this.player, b, () => this.hitPlayer()),
     ];
     this.bossBar = this.add.graphics().setDepth(10);
     this.nextFan = this.t + 3000;
@@ -464,7 +498,8 @@ class Play extends Phaser.Scene {
     const spread = [[0], [-1, 1], [-1, 0, 1], [-2, -1, 1, 2], [-2, -1, 0, 1, 2]][this.gun - 1];
     for (const i of spread) {
       const a = i * 0.09; // radians off straight up
-      this.bullets.create(this.ship.x + i * 8, this.ship.y - 30, 'laser').setVelocity(Math.sin(a) * 720, -Math.cos(a) * 720).setRotation(a);
+      // fired from the pistol's muzzle, just above Vega's hands
+      this.bullets.create(this.player.x + i * 8, this.player.y - 38, 'laser').setVelocity(Math.sin(a) * 720, -Math.cos(a) * 720).setRotation(a);
     }
   }
 
@@ -474,8 +509,8 @@ class Play extends Phaser.Scene {
     s.setVelocity(Math.sin(angle) * speed, Math.cos(angle) * speed).setRotation(-angle);
   }
 
-  angleToShip(x, y) {
-    return Math.atan2(this.ship.x - x, this.ship.y - y);
+  angleToPlayer(x, y) {
+    return Math.atan2(this.player.x - x, this.player.y - y);
   }
 
   hitEnemy(b, e) {
@@ -556,23 +591,23 @@ class Play extends Phaser.Scene {
   }
 
   // Returns true if the hit counted (false while blinking after a respawn).
-  hitShip() {
-    if (!this.ship.active || this.t < this.invulnUntil) return false;
-    this.sparks.explode(40, this.ship.x, this.ship.y);
+  hitPlayer() {
+    if (!this.player.active || this.t < this.invulnUntil) return false;
+    this.sparks.explode(40, this.player.x, this.player.y);
     boom(450, 0.12);
     this.cameras.main.shake(260, 0.012);
     this.lives--;
     this.gun = Math.max(1, this.gun - 1);
-    this.ship.disableBody(true, true);
+    this.player.disableBody(true, true);
     this.updateHud();
     if (this.lives <= 0) {
       this.time.delayedCall(1300, () => endGame(false, this));
       return true;
     }
     this.time.delayedCall(1000, () => {
-      this.ship.enableBody(true, W / 2, H - 110, true, true);
+      this.player.enableBody(true, W / 2, H - 110, true, true);
       this.invulnUntil = this.t + 2200;
-      this.tweens.add({ targets: this.ship, alpha: 0.25, duration: 130, yoyo: true, repeat: 7, onComplete: () => this.ship.setAlpha(1) });
+      this.tweens.add({ targets: this.player, alpha: 0.25, duration: 130, yoyo: true, repeat: 7, onComplete: () => this.player.setAlpha(1) });
     });
     return true;
   }
@@ -581,27 +616,27 @@ class Play extends Phaser.Scene {
     this.invulnUntil = Infinity;
     this.banner('TIME DRIVE\nFIXED!\n\nNEXT STOP:\n1986', 2600);
     this.setLook(0x140a26, 0xff4fd8);
-    this.time.delayedCall(1600, () => this.tweens.add({ targets: this.ship, y: -120, duration: 1100, ease: 'Cubic.easeIn' }));
+    this.time.delayedCall(1600, () => this.tweens.add({ targets: this.player, y: -120, duration: 1500, ease: 'Sine.easeIn' })); // walks off the top
     this.time.delayedCall(3200, () => endGame(true, this));
   }
 
   // ----- Controls -----
-  // Mouse: the cruiser goes where the pointer is. Touch: it moves by however far the finger drags,
-  // so the finger never has to cover the cruiser.
+  // Mouse: Vega goes where the pointer is. Touch: Vega moves by however far the finger drags,
+  // so the finger never has to cover the character.
   steer(e) {
-    if (app.state !== 'playing' || !this.playing || !this.ship?.active) return;
+    if (app.state !== 'playing' || !this.playing || !this.player?.active) return;
     const r = this.game.canvas.getBoundingClientRect(), k = W / r.width;
     if (e.pointerType === 'mouse') {
-      this.placeShip((e.clientX - r.left) * k, (e.clientY - r.top) * k);
+      this.placePlayer((e.clientX - r.left) * k, (e.clientY - r.top) * k);
     } else if (drag) {
-      this.placeShip(this.ship.x + (e.clientX - drag.x) * k * 1.4, this.ship.y + (e.clientY - drag.y) * k * 1.4);
+      this.placePlayer(this.player.x + (e.clientX - drag.x) * k * 1.4, this.player.y + (e.clientY - drag.y) * k * 1.4);
       drag.x = e.clientX;
       drag.y = e.clientY;
     }
   }
 
-  placeShip(x, y) {
-    this.ship.setPosition(Phaser.Math.Clamp(x, 24, W - 24), Phaser.Math.Clamp(y, H * 0.35, H - 40));
+  placePlayer(x, y) {
+    this.player.setPosition(Phaser.Math.Clamp(x, 35, W - 35), Phaser.Math.Clamp(y, H * 0.35, H - 44));
   }
 
   // ----- Every frame -----
@@ -614,19 +649,30 @@ class Play extends Phaser.Scene {
     if (!this.playing) return;
     this.t += delta;
 
-    if (this.ship.active && app.state === 'playing') {
+    if (this.player.active && app.state === 'playing') {
       const k = this.keys, speed = 0.45 * delta;
       const dx = (k.RIGHT.isDown || k.D.isDown) - (k.LEFT.isDown || k.A.isDown);
       const dy = (k.DOWN.isDown || k.S.isDown) - (k.UP.isDown || k.W.isDown);
-      if (dx || dy) this.placeShip(this.ship.x + dx * speed, this.ship.y + dy * speed);
+      if (dx || dy) this.placePlayer(this.player.x + dx * speed, this.player.y + dy * speed);
       this.fire();
+    }
+
+    // Feet step while Vega is moving and come together when standing still. Touch and mouse moves
+    // arrive in bursts, so "moving" lasts a moment after the last move to stop the feet flickering.
+    if (Math.abs(this.player.x - this.lastX) + Math.abs(this.player.y - this.lastY) > 0.5) this.lastMoveT = this.t;
+    this.lastX = this.player.x;
+    this.lastY = this.player.y;
+    if (this.t - this.lastMoveT < 150) {
+      if (!this.player.anims.isPlaying) this.player.play('walk');
+    } else if (this.player.anims.isPlaying) {
+      this.player.stop().setTexture('vega0');
     }
 
     this.updateEnemies(dt);
     this.updateBoss();
 
     for (const p of this.pickups.getChildren()) {
-      if (p.type === 'part' && this.ship.active) this.physics.moveToObject(p, this.ship, 280);
+      if (p.type === 'part' && this.player.active) this.physics.moveToObject(p, this.player, 280);
     }
     for (const g of [this.bullets, this.enemyShots, this.pickups]) {
       for (const o of g.getChildren().slice()) if (o.y < -50 || o.y > H + 50 || o.x < -50 || o.x > W + 50) o.destroy();
@@ -662,8 +708,8 @@ class Play extends Phaser.Scene {
     if (this.divers && this.t > this.nextDive) {
       this.nextDive = this.t + 1500 / this.diff.fire;
       const e = Phaser.Utils.Array.GetRandom(this.enemies.getChildren().filter(x => x.mode === 'formation' && x.enter === 1));
-      if (e && this.ship.active) {
-        Object.assign(e, { mode: 'dive', vx: (this.ship.x - e.x) * 0.45, vy: 300 });
+      if (e && this.player.active) {
+        Object.assign(e, { mode: 'dive', vx: (this.player.x - e.x) * 0.45, vy: 300 });
         beep(280, 90, 0.03);
       }
     }
@@ -672,7 +718,7 @@ class Play extends Phaser.Scene {
       const shooters = this.enemies.getChildren().filter(x => x.y > 0 && x.y < H * 0.7);
       this.nextEnemyShot = this.t + (shooters.length ? 1000 : 300) / this.diff.fire / (1 + 0.2 * this.era);
       const e = Phaser.Utils.Array.GetRandom(shooters);
-      if (e) this.shoot(e.x, e.y + 20, ERAS[this.era].shot, this.diff.shotSpeed, Phaser.Math.Clamp(this.angleToShip(e.x, e.y) * 0.5, -0.5, 0.5));
+      if (e) this.shoot(e.x, e.y + 20, ERAS[this.era].shot, this.diff.shotSpeed, Phaser.Math.Clamp(this.angleToPlayer(e.x, e.y) * 0.5, -0.5, 0.5));
     }
   }
 
@@ -696,7 +742,7 @@ class Play extends Phaser.Scene {
       this.nextAim = this.t + 2600 * rage / this.diff.fire;
       for (let i = 0; i < 3; i++) {
         this.time.delayedCall(i * 150, () => {
-          if (this.boss && this.ship.active) this.shoot(b.x, b.y + 40, 'orb', 320 * speed, this.angleToShip(b.x, b.y));
+          if (this.boss && this.player.active) this.shoot(b.x, b.y + 40, 'orb', 320 * speed, this.angleToPlayer(b.x, b.y));
         });
       }
     }

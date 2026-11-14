@@ -1,0 +1,722 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#140a26">
+<title>Rewind Patrol</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #140a26; --panel: #1f1238; --btn: #33205a; --text: #f3e9ff; --muted: #c9b6e8; --pink: #ff4fd8; --cyan: #4ff0ff; }
+  /* No scrolling, pinch/double-tap zoom, pull-to-refresh, text selection or long-press menu while playing on a phone. */
+  html, body {
+    margin: 0; height: 100%; background: var(--bg); overflow: hidden;
+    touch-action: none; overscroll-behavior: none;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--text);
+  }
+  /* Menus are plain HTML on top of the game canvas: real buttons are easy to tap, style, and use with a keyboard. */
+  #ui { position: fixed; inset: 0; z-index: 1; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgb(20 10 38 / .72); }
+  #ui[hidden], .screen[hidden], #pauseBtn[hidden] { display: none; }
+  .screen { width: min(360px, 100%); max-height: 100%; overflow-y: auto; box-sizing: border-box; background: var(--panel); border: 2px solid var(--pink); border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 12px; text-align: center; box-shadow: 0 0 28px rgb(255 79 216 / .35); }
+  h1, h2 { font-family: "Press Start 2P", monospace; font-weight: 400; margin: 0 0 4px; line-height: 1.35; }
+  h1 { font-size: 1.6rem; color: var(--pink); text-shadow: 0 0 12px var(--pink), 3px 3px 0 #2b7c8a; }
+  h2 { font-size: 1rem; color: var(--cyan); text-shadow: 0 0 8px var(--cyan); }
+  .screen p { margin: 0; color: var(--muted); }
+  .story p { text-align: left; color: var(--text); }
+  .story .hint { color: var(--muted); }
+  button, .seg label { font: inherit; font-size: 1.05rem; min-height: 48px; border: 0; border-radius: 10px; background: var(--btn); color: var(--text); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  button.primary { background: var(--pink); color: #1a0820; font-weight: 700; }
+  button:hover, .seg label:hover { filter: brightness(1.15); }
+  button:focus-visible, .seg label:has(input:focus-visible), .row:has(input:focus-visible) { outline: 3px solid var(--cyan); outline-offset: 2px; }
+  a { color: var(--cyan); padding: 8px; }
+  fieldset { border: 0; margin: 0; padding: 0; display: flex; gap: 6px; }
+  fieldset:disabled { opacity: .5; }
+  legend { color: var(--muted); padding: 0; margin-bottom: 6px; }
+  .seg label { flex: 1; display: flex; align-items: center; justify-content: center; font-size: .95rem; }
+  .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg label:has(input:checked) { background: var(--cyan); color: #10232a; font-weight: 700; }
+  .row { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: 0 12px; background: var(--btn); border-radius: 10px; cursor: pointer; }
+  .row input { width: 22px; height: 22px; accent-color: var(--cyan); }
+  .hint { font-size: .85rem; }
+  #pauseBtn { position: fixed; z-index: 1; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); width: 48px; padding: 0; opacity: .85; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+</head>
+<body>
+<div id="ui">
+  <section class="screen" id="main">
+    <h1>REWIND<br>PATROL</h1>
+    <p>An 80s cop. A busted time machine. Every army in history.</p>
+    <p id="mainBest"></p>
+    <button class="primary" data-action="play">Play</button>
+    <button data-action="settings">Settings</button>
+    <a href="../">&larr; Back to Arcade</a>
+  </section>
+
+  <section class="screen story" id="story" hidden>
+    <h2>NEON CITY, 1986</h2>
+    <p>Officer Vega answers a break-in call at Chronotech Labs. One blinding flash later, Vega's patrol cruiser is hovering over ancient Rome, fused with the lab's prototype time drive.</p>
+    <p>The drive is busted. Its three missing parts are scattered through history, and every army that spots a flying police car wants it gone.</p>
+    <p>Fight through them, recover the parts, and get back to 1986.</p>
+    <p class="hint">Drag anywhere to steer (mouse or arrow keys on a computer). Your cruiser fires on its own. Gold badges power up your gun; donuts are bonus points.</p>
+    <button class="primary" data-action="start">Start patrol</button>
+  </section>
+
+  <section class="screen" id="settings" hidden>
+    <h2>SETTINGS</h2>
+    <fieldset class="seg" id="difficulty">
+      <legend>Difficulty</legend>
+      <label><input type="radio" name="difficulty" value="easy">Easy</label>
+      <label><input type="radio" name="difficulty" value="normal">Normal</label>
+      <label><input type="radio" name="difficulty" value="hard">Hard</label>
+    </fieldset>
+    <p class="hint" id="difficultyHint" hidden>Difficulty can be changed from the main menu.</p>
+    <label class="row">Sound <input type="checkbox" id="sound"></label>
+    <button data-action="back">Back</button>
+  </section>
+
+  <section class="screen" id="pause" hidden>
+    <h2>PAUSED</h2>
+    <button class="primary" data-action="resume">Resume</button>
+    <button data-action="settings">Settings</button>
+    <button data-action="menu">Main menu</button>
+  </section>
+
+  <section class="screen" id="end" hidden>
+    <h2 id="endTitle"></h2>
+    <p id="endText"></p>
+    <button class="primary" data-action="start">Play again</button>
+    <button data-action="menu">Main menu</button>
+  </section>
+</div>
+<button id="pauseBtn" aria-label="Pause" hidden>&#10074;&#10074;</button>
+
+<script>
+// ponytail: one fixed portrait screen, like a vertical arcade cabinet. Desktop gets it letterboxed; phones fill the width.
+const W = 600, H = 900;
+const FONT = '"Press Start 2P", monospace';
+
+// ---------- Pixel art: each sprite is rows of palette characters ('.' = transparent), turned into textures by Phaser. ----------
+const PAL = {
+  0: '#000000', 1: '#ffffff', 2: '#ff3b3b', 3: '#3b7bff', 4: '#ffd23b', 5: '#7d7d8c', 6: '#c8c8d4', 7: '#6b3e1f',
+  8: '#f0b98a', 9: '#1b1b2f', A: '#ff4fd8', B: '#4ff0ff', C: '#2e8b3a', D: '#b5651d', E: '#8a1c1c', F: '#4b4b63',
+};
+const ART = {
+  cruiser: ['...4....4...', '..33333333..', '.6333333336.', '.6333333336.', '..1BBBBBB1..', '..11111111..', '..13332221..',
+            '..11111111..', '..1BBBBBB1..', '.6333333336.', '.6333333336.', '..23333332..', '...A....A...', '...A....A...'],
+  legionary: ['.....22.....', '....2222....', '...444444...', '..44888844..', '...408804...', '....8888....',
+              '..E222222E..', '.4E222222E4.', '.4422222244.', '..22444422..', '...7....7...', '...7....7...'],
+  knight: ['.....33.....', '....6666....', '...666666...', '..66666666..', '..60000006..', '..66666666..',
+           '..33311333..', '.6333113336.', '.6311111136.', '..33311333..', '...5....5...', '...5....5...'],
+  pirate: ['...222222...', '..22122122..', '..88888888..', '..80088808..', '..88888888..', '...877778...',
+           '..1E1E1E1E..', '.81E1E1E1E8.', '.8E1E1E1E18.', '..1E1E1E1E..', '...9....9...', '...9....9...'],
+  centurion: ['........2222........', '......22222222......', '.....2222222222.....', '......44444444......',
+              '....444444444444....', '...44444444444444...', '...44488888888444...', '...44800888800844...',
+              '...44888888888844...', '...44488888888444...', '....448888888844....', '.....4488EE8844.....',
+              '......44888844......', '..EEEE22222222EEEE..', '.E4444222222224444E.', '.E4444222442224444E.',
+              '..EEEE22222222EEEE..'],
+  grimhelm: ['.5................5.', '.55..............55.', '..55..FFFFFFFF..55..', '...5FFFFFFFFFFFF5...',
+             '....FFFFFFFFFFFF....', '...FFFFFFFFFFFFFF...', '...FF0000000000FF...', '...FF0220000220FF...',
+             '...FF0000000000FF...', '...FFFFFFFFFFFFFF...', '...FF5F5F5F5F5FFF...', '....FFFFFFFFFFFF....',
+             '.....FFFFFFFFFF.....', '..FFFFF666666FFFFF..', '.FFFFFF6EEEE6FFFFFF.', '.FFFFFF6EEEE6FFFFFF.',
+             '..FFFFF666666FFFFF..'],
+  blackpowder: ['.......000000.......', '....000001100000....', '..0000001111000000..', '.000000001100000000.',
+                '44444444444444444444', '...88888888888888...', '...88008888880088...', '...88888888888888...',
+                '...88888877888888...', '...77777777777777...', '...77770000007777...', '....777777777777....',
+                '.....7777777777.....', '..EEEEE444444EEEEE..', '.EEEEEEE4444EEEEEEE.', '.EEEEEEEE44EEEEEEEE.'],
+  spear: ['.8.', '.8.', '.8.', '.8.', '.8.', '.8.', '.8.', '.6.', '666', '.6.'],
+  arrow: ['1.1', '.1.', '.8.', '.8.', '.8.', '.8.', '.8.', '666', '.6.'],
+  cannonball: ['.555.', '56655', '55555', '55555', '.555.'],
+  orb: ['.AAAA.', 'AA11AA', 'A1111A', 'A1111A', 'AA11AA', '.AAAA.'],
+  laser: ['11', 'BB', 'BB', 'BB', 'BB', 'BB'],
+  badge: ['....4....', '...444...', '444444444', '.4443444.', '..44444..', '.444.444.', '.44...44.'],
+  donut: ['..AAAAA..', '.A4AABAA.', 'AAA...A1A', 'AAA...AAA', '.DAAAAAD.', '..DDDDD..'],
+  part: ['...BBB...', '.B.BBB.B.', '..BBBBB..', 'BBB111BBB', 'BBB1A1BBB', 'BBB111BBB', '..BBBBB..', '.B.BBB.B.', '...BBB...'],
+  spark: ['11', '11'],
+  streak: ['1', '1', '1', '1'],
+};
+const PIXEL = { centurion: 6, grimhelm: 6, blackpowder: 6, spear: 3, arrow: 3, cannonball: 3, orb: 3, laser: 3, spark: 2, streak: 2 };
+
+// ---------- The story: each era has its own army, enemy shot, boss and missing time-drive part. ----------
+const ERAS = [
+  { name: 'Rome', year: '44 BC', bg: 0x2a120f, lines: 0xffb070, enemy: 'legionary', shot: 'spear', hp: 1,
+    boss: 'centurion', bossName: 'THE IRON\nCENTURION', bossHp: 90, part: 'QUARTZ CORE' },
+  { name: 'England', year: '1250 AD', bg: 0x0e1a14, lines: 0x9fe0a0, enemy: 'knight', shot: 'arrow', hp: 2,
+    boss: 'grimhelm', bossName: 'SIR GRIMHELM', bossHp: 140, part: 'TAPE REEL' },
+  { name: 'The Caribbean', year: '1715 AD', bg: 0x071a2e, lines: 0x7fd0ff, enemy: 'pirate', shot: 'cannonball', hp: 2,
+    boss: 'blackpowder', bossName: 'CAPTAIN\nBLACKPOWDER', bossHp: 190, part: 'SIREN COIL' },
+];
+const WAVES = ['formation', 'stream', 'divers', 'boss'];
+const DIFFICULTY = {
+  easy:   { label: 'Easy',   lives: 5, fire: 0.6, shotSpeed: 200, bossHp: 0.8 },
+  normal: { label: 'Normal', lives: 3, fire: 1,   shotSpeed: 250, bossHp: 1 },
+  hard:   { label: 'Hard',   lives: 3, fire: 1.5, shotSpeed: 310, bossHp: 1.3 },
+};
+
+// Settings and best scores are saved in this browser. Private windows can block storage, so every access is guarded.
+const store = {
+  get(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } },
+  set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} },
+};
+const settings = { sound: true, difficulty: 'normal', ...store.get('rewind-settings', {}) };
+if (!DIFFICULTY[settings.difficulty]) settings.difficulty = 'normal';
+const saveSettings = () => store.set('rewind-settings', settings);
+const bestKey = () => `rewind-best-${settings.difficulty}`;
+
+// ---------- Sound: tiny synth beeps and noise bursts, no audio files. ----------
+// Browsers (iPhones especially) only allow sound after a tap or key press, so the audio is created on the first one.
+let audio;
+function unlockAudio() { try { audio ??= new AudioContext(); audio.resume(); } catch {} }
+addEventListener('pointerup', unlockAudio);
+addEventListener('keydown', unlockAudio);
+function beep(freq, ms = 60, vol = 0.05) {
+  if (!audio || !settings.sound) return;
+  try {
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.type = 'square';
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, audio.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + ms / 1000);
+    o.connect(g).connect(audio.destination);
+    o.start();
+    o.stop(audio.currentTime + ms / 1000);
+  } catch {}
+}
+function boom(ms = 120, vol = 0.08) {
+  if (!audio || !settings.sound) return;
+  try {
+    const len = Math.floor(audio.sampleRate * ms / 1000), buf = audio.createBuffer(1, len, audio.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audio.createBufferSource(), g = audio.createGain();
+    g.gain.value = vol;
+    src.buffer = buf;
+    src.connect(g).connect(audio.destination);
+    src.start();
+  } catch {}
+}
+const jingle = notes => notes.forEach((f, i) => setTimeout(() => beep(f, 90), i * 90));
+
+// ---------- Menus (HTML) ----------
+const $ = id => document.getElementById(id);
+// The whole game is in one of these states; only 'playing' accepts game input.
+const app = { state: 'menu', settingsFrom: 'main' };
+let game;
+const scene = () => game?.scene.getScene('play');
+
+// Show one menu screen (or none, while playing) and put keyboard focus on its main button.
+function showScreen(id) {
+  $('ui').hidden = !id;
+  for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id;
+  if (id) $(id).querySelector('.primary, button')?.focus({ preventScroll: true });
+}
+function updateMainBest() {
+  $('mainBest').textContent = `Best (${DIFFICULTY[settings.difficulty].label}): ${store.get(bestKey(), 0)}`;
+}
+// Restarting the scene wipes every enemy, timer and tween from the last run in one go.
+// sys.resume first: a paused scene must be running again before it restarts.
+function restartScene(play) {
+  scene().sys.resume();
+  scene().scene.restart({ play });
+}
+function toMenu() {
+  app.state = 'menu';
+  restartScene(false);
+  $('pauseBtn').hidden = true;
+  updateMainBest();
+  showScreen('main');
+}
+function startGame() {
+  app.state = 'playing';
+  restartScene(true);
+  showScreen(null);
+  $('pauseBtn').hidden = false;
+  document.activeElement?.blur();
+}
+// sys.pause/resume act immediately; scene.pause/resume wait a frame, which races with menu clicks.
+function pauseGame() {
+  if (app.state !== 'playing') return;
+  app.state = 'paused';
+  scene().sys.pause();
+  $('pauseBtn').hidden = true;
+  showScreen('pause');
+}
+function resumeGame() {
+  scene().sys.resume();
+  app.state = 'playing';
+  showScreen(null);
+  $('pauseBtn').hidden = false;
+  document.activeElement?.blur();
+}
+function openSettings() {
+  // Difficulty is locked mid-game; changing it means starting over, so that's done from the main menu.
+  app.settingsFrom = app.state === 'paused' ? 'pause' : 'main';
+  const locked = app.settingsFrom === 'pause';
+  $('difficulty').disabled = locked;
+  $('difficultyHint').hidden = !locked;
+  showScreen('settings');
+}
+function endGame(won, s) {
+  app.state = won ? 'won' : 'over';
+  $('pauseBtn').hidden = true;
+  const era = ERAS[s.era];
+  $('endTitle').textContent = won ? 'CASE CLOSED' : 'GAME OVER';
+  $('endText').textContent = (won ? 'Officer Vega is back in 1986, time drive fixed.' : `Stranded in ${era.name}, ${era.year}.`)
+    + ` Score ${s.score}.` + (s.newBest ? ' New best!' : '');
+  showScreen('end');
+}
+
+$('ui').addEventListener('click', e => {
+  const action = e.target.closest('button')?.dataset.action;
+  if (!action || !scene()) return;
+  if (action === 'play') { app.state = 'story'; showScreen('story'); }
+  else if (action === 'start') startGame();
+  else if (action === 'resume') resumeGame();
+  else if (action === 'menu') toMenu();
+  else if (action === 'settings') openSettings();
+  else if (action === 'back') showScreen(app.settingsFrom);
+});
+$('pauseBtn').addEventListener('click', pauseGame);
+for (const r of document.querySelectorAll('input[name=difficulty]')) {
+  r.checked = r.value === settings.difficulty;
+  r.addEventListener('change', () => { settings.difficulty = r.value; saveSettings(); updateMainBest(); });
+}
+$('sound').checked = settings.sound;
+$('sound').addEventListener('change', e => { settings.sound = e.target.checked; saveSettings(); });
+addEventListener('keydown', e => {
+  if (e.key !== 'Escape' && e.key?.toLowerCase() !== 'p') return;
+  if (app.state === 'playing') pauseGame();
+  else if (app.state === 'paused') resumeGame();
+});
+// Switching apps or tabs mid-game opens the pause menu.
+document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
+
+// Steering listens on the whole page, so a thumb anywhere (even below the game) can drag the cruiser.
+let drag = null;
+addEventListener('pointerdown', e => {
+  if (e.target.closest?.('button, a, label')) return; // taps on menu controls aren't game input
+  drag = { x: e.clientX, y: e.clientY };
+});
+addEventListener('pointermove', e => scene()?.steer(e));
+addEventListener('pointerup', () => { drag = null; });
+addEventListener('pointercancel', () => { drag = null; });
+
+// ---------- The game ----------
+class Play extends Phaser.Scene {
+  constructor() { super('play'); }
+
+  create(data) {
+    this.playing = !!data?.play;
+    if (!this.textures.exists('cruiser')) {
+      for (const [key, rows] of Object.entries(ART)) this.textures.generate(key, { data: rows, pixelWidth: PIXEL[key] ?? 4, palette: PAL });
+    }
+    this.diff = DIFFICULTY[settings.difficulty];
+    this.t = 0; // game time that stops while paused (update() isn't called then)
+
+    // Streaks rushing past give the "flying through time" feeling.
+    this.streaks = Array.from({ length: 40 }, () => {
+      const s = this.add.image(Phaser.Math.Between(0, W), Phaser.Math.Between(0, H), 'streak');
+      s.speed = Phaser.Math.Between(150, 520);
+      return s.setAlpha(Phaser.Math.FloatBetween(0.2, 0.7));
+    });
+    this.setLook(0x140a26, 0xff4fd8);
+
+    this.ship = this.physics.add.image(W / 2, H - 110, 'cruiser').setDepth(2);
+    this.ship.body.setSize(26, 40); // forgiving hitbox, smaller than the car
+    this.sparks = this.add.particles(0, 0, 'spark', {
+      speed: { min: 60, max: 280 }, lifespan: { min: 250, max: 650 }, scale: { start: 1.4, end: 0 },
+      tint: [0xffffff, 0xffd23b, 0xff4fd8, 0x4ff0ff], emitting: false,
+    }).setDepth(3);
+
+    if (!this.playing) { // main-menu backdrop: the cruiser just hovers
+      this.tweens.add({ targets: this.ship, y: H - 140, duration: 1300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      return;
+    }
+
+    this.bullets = this.physics.add.group();
+    this.enemyShots = this.physics.add.group();
+    this.enemies = this.physics.add.group();
+    this.pickups = this.physics.add.group();
+    this.physics.add.overlap(this.bullets, this.enemies, (b, e) => this.hitEnemy(b, e));
+    this.physics.add.overlap(this.ship, this.enemyShots, (s, shot) => { if (this.hitShip()) shot.destroy(); });
+    this.physics.add.overlap(this.ship, this.enemies, (s, e) => { if (this.hitShip()) this.killEnemy(e, false); });
+    this.physics.add.overlap(this.ship, this.pickups, (s, p) => this.collect(p));
+
+    // false = don't swallow these keys, so the menus keep working with the keyboard.
+    this.keys = this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S', false);
+    this.hud = this.add.text(14, 14, '', { fontFamily: FONT, fontSize: '14px', color: '#ffffff', lineSpacing: 8 }).setDepth(10);
+
+    Object.assign(this, { score: 0, lives: this.diff.lives, gun: 1, parts: 0, best: store.get(bestKey(), 0), newBest: false,
+      nextFire: 0, nextEnemyShot: 0, invulnUntil: 0, waveActive: false, spawnsLeft: 0, divers: false, boss: null });
+    this.startEra(0);
+  }
+
+  setLook(bg, lines) {
+    this.cameras.main.setBackgroundColor(bg);
+    for (const s of this.streaks) s.setTint(lines);
+  }
+
+  banner(text, ms, size = 22) {
+    const t = this.add.text(W / 2, H * 0.42, text, {
+      fontFamily: FONT, fontSize: `${size}px`, color: '#ff4fd8', align: 'center', stroke: '#140a26', strokeThickness: 6, lineSpacing: 14,
+    }).setOrigin(0.5).setDepth(10).setAlpha(0);
+    this.tweens.add({ targets: t, alpha: 1, duration: 250, hold: ms - 500, yoyo: true, onComplete: () => t.destroy() });
+  }
+
+  updateHud() {
+    this.hud.setText(`SCORE ${this.score}\nLIVES ${this.lives}  GUN ${this.gun}  DRIVE ${this.parts}/${ERAS.length}`);
+  }
+
+  addScore(n) {
+    this.score += n;
+    if (this.score > this.best) {
+      this.best = this.score;
+      this.newBest = true;
+      store.set(bestKey(), this.best);
+    }
+    this.updateHud();
+  }
+
+  // ----- Story flow: era title card -> formation -> stream -> divers -> boss -> part -> next era -----
+  startEra(i) {
+    this.era = i;
+    this.wave = -1;
+    const era = ERAS[i];
+    this.setLook(era.bg, era.lines);
+    this.banner(`${era.name.toUpperCase()}\n${era.year}`, 2400, 28);
+    this.time.delayedCall(2600, () => this.nextWave());
+    this.updateHud();
+  }
+
+  nextWave() {
+    this.wave++;
+    this.divers = false;
+    const type = WAVES[this.wave];
+    if (type === 'boss') return this.spawnBoss();
+    if (type === 'formation') this.formation(4, 7);
+    else if (type === 'stream') this.stream(3, 8);
+    else { this.formation(3, 7); this.divers = true; this.nextDive = this.t + 2500; }
+    this.waveActive = true;
+  }
+
+  // One random enemy in every wave carries a gun-upgrade badge.
+  prepWave(total, delayed) {
+    this.spawned = 0;
+    this.badgeAt = Phaser.Math.Between(0, total - 1);
+    this.spawnsLeft = delayed ? total : 0;
+  }
+
+  spawnEnemy(x, y, props) {
+    const era = ERAS[this.era];
+    const e = this.enemies.create(x, y, era.enemy);
+    return Object.assign(e, { hp: era.hp, badge: this.spawned++ === this.badgeAt }, props);
+  }
+
+  // A grid that flies in, then sways side to side.
+  formation(rows, cols) {
+    const sx = 70, sy = 62, left = W / 2 - (cols - 1) * sx / 2;
+    this.prepWave(rows * cols, false);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const e = this.spawnEnemy(W / 2, -60, {
+          mode: 'formation', homeX: left + c * sx, homeY: 130 + r * sy, fromX: Phaser.Math.Between(0, W), fromY: -60 - r * 40, enter: 0,
+        });
+        this.tweens.add({ targets: e, enter: 1, delay: (r * cols + c) * 45, duration: 1100, ease: 'Sine.easeOut' });
+      }
+    }
+  }
+
+  // Lines of enemies snaking down the screen; any that get past just leave.
+  stream(lines, per) {
+    this.prepWave(lines * per, true);
+    for (let s = 0; s < lines; s++) {
+      for (let i = 0; i < per; i++) {
+        this.time.delayedCall(s * 2600 + i * 260, () => {
+          this.spawnEnemy(W / 2, -40, { mode: 'stream', age: 0, side: s % 2 ? -1 : 1, phase: s * 0.9 });
+          this.spawnsLeft--;
+        });
+      }
+    }
+  }
+
+  spawnBoss() {
+    const era = ERAS[this.era];
+    this.banner(era.bossName, 2200, 26);
+    const b = this.boss = this.physics.add.image(W / 2, -110, era.boss).setDepth(1);
+    b.maxHp = b.hp = Math.round(era.bossHp * this.diff.bossHp);
+    b.ready = false;
+    this.tweens.add({ targets: b, y: 180, duration: 2200, ease: 'Sine.easeOut', onComplete: () => { b.ready = true; b.readyAt = this.t; } });
+    this.bossColliders = [
+      this.physics.add.overlap(b, this.bullets, (boss, bullet) => this.hitBoss(bullet)),
+      this.physics.add.overlap(this.ship, b, () => this.hitShip()),
+    ];
+    this.bossBar = this.add.graphics().setDepth(10);
+    this.nextFan = this.t + 3000;
+    this.nextAim = this.t + 4200;
+  }
+
+  // ----- Shooting -----
+  fire() {
+    if (this.t < this.nextFire) return;
+    this.nextFire = this.t + 150;
+    const spread = [[0], [-1, 1], [-1, 0, 1], [-2, -1, 1, 2], [-2, -1, 0, 1, 2]][this.gun - 1];
+    for (const i of spread) {
+      const a = i * 0.09; // radians off straight up
+      this.bullets.create(this.ship.x + i * 8, this.ship.y - 30, 'laser').setVelocity(Math.sin(a) * 720, -Math.cos(a) * 720).setRotation(a);
+    }
+  }
+
+  // Angle is measured from straight down: 0 = down, positive = towards the right.
+  shoot(x, y, tex, speed, angle) {
+    const s = this.enemyShots.create(x, y, tex);
+    s.setVelocity(Math.sin(angle) * speed, Math.cos(angle) * speed).setRotation(-angle);
+  }
+
+  angleToShip(x, y) {
+    return Math.atan2(this.ship.x - x, this.ship.y - y);
+  }
+
+  hitEnemy(b, e) {
+    if (!b.active || !e.active) return;
+    b.destroy();
+    if (--e.hp > 0) {
+      e.setTintFill(0xffffff);
+      this.time.delayedCall(60, () => e.active && e.clearTint());
+      beep(620, 25, 0.03);
+      return;
+    }
+    this.killEnemy(e, true);
+  }
+
+  killEnemy(e, byPlayer) {
+    this.sparks.explode(14, e.x, e.y);
+    boom(90);
+    if (byPlayer) {
+      this.addScore(100 * (this.era + 1));
+      if (e.badge) this.drop('badge', e.x, e.y);
+      else if (Math.random() < 0.12) this.drop('donut', e.x, e.y);
+    }
+    e.destroy();
+  }
+
+  hitBoss(bullet) {
+    const b = this.boss;
+    if (!bullet.active || !b) return;
+    bullet.destroy();
+    if (!b.ready) return; // can't be hurt while flying in
+    b.hp--;
+    b.setTintFill(0xffffff);
+    this.time.delayedCall(40, () => b.active && b.clearTint());
+    if (b.hp <= 0) this.bossDown();
+  }
+
+  bossDown() {
+    const b = this.boss;
+    this.boss = null;
+    this.bossColliders.forEach(c => c.destroy());
+    this.bossBar.destroy();
+    b.disableBody(false, false);
+    this.enemyShots.clear(true, true);
+    this.addScore(5000 * (this.era + 1));
+    this.cameras.main.shake(700, 0.015);
+    for (let i = 0; i < 7; i++) {
+      this.time.delayedCall(i * 120, () => {
+        this.sparks.explode(30, b.x + Phaser.Math.Between(-45, 45), b.y + Phaser.Math.Between(-35, 35));
+        boom(220, 0.1);
+      });
+    }
+    this.time.delayedCall(900, () => { this.drop('part', b.x, b.y); b.destroy(); });
+  }
+
+  drop(type, x, y) {
+    const p = this.pickups.create(x, y, type);
+    p.type = type;
+    if (type !== 'part') p.setVelocityY(140);
+  }
+
+  collect(p) {
+    const type = p.type;
+    p.destroy();
+    if (type === 'badge') {
+      if (this.gun < 5) { this.gun++; this.banner('GUN UP!', 900, 18); } else this.addScore(1000);
+      jingle([660, 990]);
+    } else if (type === 'donut') {
+      this.addScore(250);
+      beep(1200, 50);
+    } else if (type === 'part') {
+      this.parts++;
+      this.addScore(2000);
+      jingle([523, 659, 784, 1046]);
+      this.banner(`GOT THE\n${ERAS[this.era].part}!\n\nTIME DRIVE ${this.parts}/${ERAS.length}`, 2800);
+      this.time.delayedCall(3100, () => (this.era + 1 < ERAS.length ? this.startEra(this.era + 1) : this.victory()));
+    }
+    this.updateHud();
+  }
+
+  // Returns true if the hit counted (false while blinking after a respawn).
+  hitShip() {
+    if (!this.ship.active || this.t < this.invulnUntil) return false;
+    this.sparks.explode(40, this.ship.x, this.ship.y);
+    boom(450, 0.12);
+    this.cameras.main.shake(260, 0.012);
+    this.lives--;
+    this.gun = Math.max(1, this.gun - 1);
+    this.ship.disableBody(true, true);
+    this.updateHud();
+    if (this.lives <= 0) {
+      this.time.delayedCall(1300, () => endGame(false, this));
+      return true;
+    }
+    this.time.delayedCall(1000, () => {
+      this.ship.enableBody(true, W / 2, H - 110, true, true);
+      this.invulnUntil = this.t + 2200;
+      this.tweens.add({ targets: this.ship, alpha: 0.25, duration: 130, yoyo: true, repeat: 7, onComplete: () => this.ship.setAlpha(1) });
+    });
+    return true;
+  }
+
+  victory() {
+    this.invulnUntil = Infinity;
+    this.banner('TIME DRIVE\nFIXED!\n\nNEXT STOP:\n1986', 2600);
+    this.setLook(0x140a26, 0xff4fd8);
+    this.time.delayedCall(1600, () => this.tweens.add({ targets: this.ship, y: -120, duration: 1100, ease: 'Cubic.easeIn' }));
+    this.time.delayedCall(3200, () => endGame(true, this));
+  }
+
+  // ----- Controls -----
+  // Mouse: the cruiser goes where the pointer is. Touch: it moves by however far the finger drags,
+  // so the finger never has to cover the cruiser.
+  steer(e) {
+    if (app.state !== 'playing' || !this.playing || !this.ship?.active) return;
+    const r = this.game.canvas.getBoundingClientRect(), k = W / r.width;
+    if (e.pointerType === 'mouse') {
+      this.placeShip((e.clientX - r.left) * k, (e.clientY - r.top) * k);
+    } else if (drag) {
+      this.placeShip(this.ship.x + (e.clientX - drag.x) * k * 1.4, this.ship.y + (e.clientY - drag.y) * k * 1.4);
+      drag.x = e.clientX;
+      drag.y = e.clientY;
+    }
+  }
+
+  placeShip(x, y) {
+    this.ship.setPosition(Phaser.Math.Clamp(x, 24, W - 24), Phaser.Math.Clamp(y, H * 0.35, H - 40));
+  }
+
+  // ----- Every frame -----
+  update(_, delta) {
+    const dt = delta / 1000;
+    for (const s of this.streaks) {
+      s.y += s.speed * dt;
+      if (s.y > H + 20) { s.y = -20; s.x = Phaser.Math.Between(0, W); }
+    }
+    if (!this.playing) return;
+    this.t += delta;
+
+    if (this.ship.active && app.state === 'playing') {
+      const k = this.keys, speed = 0.45 * delta;
+      const dx = (k.RIGHT.isDown || k.D.isDown) - (k.LEFT.isDown || k.A.isDown);
+      const dy = (k.DOWN.isDown || k.S.isDown) - (k.UP.isDown || k.W.isDown);
+      if (dx || dy) this.placeShip(this.ship.x + dx * speed, this.ship.y + dy * speed);
+      this.fire();
+    }
+
+    this.updateEnemies(dt);
+    this.updateBoss();
+
+    for (const p of this.pickups.getChildren()) {
+      if (p.type === 'part' && this.ship.active) this.physics.moveToObject(p, this.ship, 280);
+    }
+    for (const g of [this.bullets, this.enemyShots, this.pickups]) {
+      for (const o of g.getChildren().slice()) if (o.y < -50 || o.y > H + 50 || o.x < -50 || o.x > W + 50) o.destroy();
+    }
+
+    if (this.waveActive && this.spawnsLeft === 0 && this.enemies.countActive() === 0) {
+      this.waveActive = false;
+      this.time.delayedCall(1200, () => this.nextWave());
+    }
+  }
+
+  updateEnemies(dt) {
+    const sway = Math.sin(this.t / 900) * 50, bob = Math.sin(this.t / 400) * 6;
+    for (const e of this.enemies.getChildren().slice()) {
+      if (e.mode === 'formation') {
+        e.x = Phaser.Math.Linear(e.fromX, e.homeX + sway, e.enter);
+        e.y = Phaser.Math.Linear(e.fromY, e.homeY + bob, e.enter);
+      } else if (e.mode === 'stream') {
+        e.age += dt;
+        e.y = -40 + e.age * 150;
+        e.x = W / 2 + e.side * Math.sin(e.age * 1.6 + e.phase) * W * 0.36;
+        if (e.y > H + 40) e.destroy();
+      } else if (e.mode === 'dive') {
+        e.x += e.vx * dt;
+        e.y += e.vy * dt;
+        if (e.y > H + 40) { // flew past: come back in from the top to its old spot
+          Object.assign(e, { mode: 'formation', fromX: e.homeX, fromY: -60, enter: 0 });
+          this.tweens.add({ targets: e, enter: 1, duration: 1200, ease: 'Sine.easeOut' });
+        }
+      }
+    }
+
+    if (this.divers && this.t > this.nextDive) {
+      this.nextDive = this.t + 1500 / this.diff.fire;
+      const e = Phaser.Utils.Array.GetRandom(this.enemies.getChildren().filter(x => x.mode === 'formation' && x.enter === 1));
+      if (e && this.ship.active) {
+        Object.assign(e, { mode: 'dive', vx: (this.ship.x - e.x) * 0.45, vy: 300 });
+        beep(280, 90, 0.03);
+      }
+    }
+
+    if (this.t > this.nextEnemyShot) {
+      const shooters = this.enemies.getChildren().filter(x => x.y > 0 && x.y < H * 0.7);
+      this.nextEnemyShot = this.t + (shooters.length ? 1000 : 300) / this.diff.fire / (1 + 0.2 * this.era);
+      const e = Phaser.Utils.Array.GetRandom(shooters);
+      if (e) this.shoot(e.x, e.y + 20, ERAS[this.era].shot, this.diff.shotSpeed, Phaser.Math.Clamp(this.angleToShip(e.x, e.y) * 0.5, -0.5, 0.5));
+    }
+  }
+
+  updateBoss() {
+    const b = this.boss;
+    if (!b) return;
+    const bw = W - 120;
+    this.bossBar.clear().fillStyle(0x000000, 0.6).fillRect(60, 64, bw, 12).fillStyle(0xff4fd8).fillRect(60, 64, bw * b.hp / b.maxHp, 12);
+    if (!b.ready) return;
+
+    b.x = W / 2 + Math.sin((this.t - b.readyAt) / 1300) * (W / 2 - 90);
+    const rage = b.hp < b.maxHp / 2 ? 0.65 : 1; // attacks come faster below half health
+    const speed = this.diff.shotSpeed / 250;
+    if (this.t > this.nextFan) {
+      this.nextFan = this.t + 1800 * rage / this.diff.fire;
+      const n = rage < 1 ? 7 : 5;
+      for (let i = 0; i < n; i++) this.shoot(b.x, b.y + 40, 'orb', 220 * speed, -0.7 + 1.4 * i / (n - 1));
+      beep(180, 120, 0.04);
+    }
+    if (this.t > this.nextAim) {
+      this.nextAim = this.t + 2600 * rage / this.diff.fire;
+      for (let i = 0; i < 3; i++) {
+        this.time.delayedCall(i * 150, () => {
+          if (this.boss && this.ship.active) this.shoot(b.x, b.y + 40, 'orb', 320 * speed, this.angleToShip(b.x, b.y));
+        });
+      }
+    }
+  }
+}
+
+updateMainBest();
+// Phaser draws text once, so wait (briefly) for the arcade font before starting the game.
+Promise.race([document.fonts?.load(`16px ${FONT}`), new Promise(r => setTimeout(r, 2000))]).finally(() => {
+  game = new Phaser.Game({
+    type: Phaser.AUTO,
+    width: W,
+    height: H,
+    backgroundColor: '#140a26',
+    pixelArt: true,
+    physics: { default: 'arcade' },
+    scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+    scene: Play,
+  });
+});
+</script>
+</body>
+</html>

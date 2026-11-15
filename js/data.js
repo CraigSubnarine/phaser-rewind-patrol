@@ -11,6 +11,9 @@ const STAGES_PER_ERA = 10;
 const GROUND_Y = 430, BAND_TOP = 470, GROUND_SPEED = 300;
 const BONUS_TIME = 45000; // how long a bonus level lasts, in ms
 const BONUS_CHANCE = 0.5; // chance that a mini-boss level leads into a bonus level (chase or escape, 50/50)
+// Coins per rider taken down in a bonus level, paid at the end; a hit there costs twice this. Flat on purpose: later
+// timelines already send riders faster, so scaling this too made late bonus levels pay ~7 normal levels' worth.
+const BONUS_PAY = 1;
 const COIN_CHANCE = 0.2; // chance that a defeated enemy drops a coin
 
 // Seven timelines. Each run's seed picks 5 of them, in a random order, for stages 1-50 (10 stages each). Stage 5 of

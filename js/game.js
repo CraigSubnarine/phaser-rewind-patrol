@@ -459,7 +459,7 @@ class Play extends Phaser.Scene {
     for (const p of this.pickups.getChildren().slice()) this.collect(p); // coins still on the road are yours
     this.clearShots();
     this.obstacles.clear(true, true);
-    const pay = b.caught * (2 + this.era);
+    const pay = b.caught * BONUS_PAY;
     this.addCoins(pay);
     jingle([523, 659, 784, 1046, 1318]);
     this.banner(`BONUS COMPLETE\n\n${b.caught} RIDERS\n+$${Math.floor(pay * this.P.coinMult)}`, 2400, 22);
@@ -814,7 +814,7 @@ class Play extends Phaser.Scene {
       return true;
     }
     if (this.bonus) { // bonus levels can't cost HP: you drop some coins instead
-      const lost = Math.min(Math.floor(this.coins), 3 + this.era);
+      const lost = Math.min(Math.floor(this.coins), 2 * BONUS_PAY);
       this.coins -= lost;
       this.invulnUntil = this.t + 1000;
       this.toast(lost ? `-$${lost}` : 'OOF', this.player.x, this.player.y - 50, '#ffd23b');

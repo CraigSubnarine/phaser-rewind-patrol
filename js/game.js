@@ -1,5 +1,7 @@
 // Rewind Patrol: the game scene. Loaded last (after data.js, art.js and ui.js).
 
+const SHOT_GLOW = 6; // pixels of glow and rings around every shot (see Play.glowTexture)
+
 class Play extends Phaser.Scene {
   constructor() { super('play'); }
 
@@ -721,10 +723,43 @@ class Play extends Phaser.Scene {
     }
   }
 
+  // Shots have to read on every road, light or dark: each shot sprite gets a copy wrapped in a soft glow, a bright ring
+  // and a dark ring (pink for enemy shots, cyan for Vega's, so you can also tell them apart: pink stands out from every
+  // road's colors). Made once per sprite and color, from whatever image the sprite has (your own PNGs too). It's only
+  // looks: hitboxes stay the sprite's own size.
+  glowTexture(tex, color) {
+    const key = `${tex}~${color.toString(16)}`, m = SHOT_GLOW;
+    if (this.textures.exists(key)) return key;
+    const src = this.textures.get(tex).getSourceImage(), w = src.width, h = src.height, css = `#${color.toString(16).padStart(6, '0')}`;
+    const silhouette = fill => { // the sprite's shape in one color
+      const c = document.createElement('canvas'), ctx = c.getContext('2d');
+      Object.assign(c, { width: w, height: h });
+      ctx.drawImage(src, 0, 0);
+      ctx.globalCompositeOperation = 'source-in';
+      ctx.fillStyle = fill;
+      ctx.fillRect(0, 0, w, h);
+      return c;
+    };
+    const bright = silhouette(css), dark = silhouette('#140a26');
+    const ring = (img, r) => { for (let a = 0; a < 16; a++) ctx.drawImage(img, m + Math.round(Math.cos(a * Math.PI / 8) * r), m + Math.round(Math.sin(a * Math.PI / 8) * r)); };
+    const c = document.createElement('canvas'), ctx = c.getContext('2d');
+    Object.assign(c, { width: w + 2 * m, height: h + 2 * m });
+    ctx.shadowColor = css;
+    ctx.shadowBlur = m;
+    ring(bright, 2); // glow
+    ctx.shadowBlur = 0;
+    ring(bright, 3); // bright ring...
+    ring(dark, 1.5); // ...around a dark one
+    ctx.drawImage(src, m, m);
+    this.textures.addCanvas(key, c);
+    return key;
+  }
+
   // Angle in radians: -PI/2 is straight up.
   spawnBullet(x, y, tex, angle, o) {
     const speed = o.speed ?? this.P.bulletSpeed;
-    const b = this.bullets.create(x, y, tex).setRotation(angle + Math.PI / 2).setScale(o.scale ?? 1);
+    const b = this.bullets.create(x, y, this.glowTexture(tex, 0x4ff0ff)).setRotation(angle + Math.PI / 2).setScale(o.scale ?? 1);
+    b.body.setSize(b.width - 2 * SHOT_GLOW, b.height - 2 * SHOT_GLOW);
     b.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
     return Object.assign(b, { dmg: o.dmg, pierce: o.pierce, bounce: o.bounce, explode: o.explode ?? 0, cannon: !!o.cannon, burns: !!o.burns, home: o.home ?? 0, hits: new Set() });
   }
@@ -795,7 +830,8 @@ class Play extends Phaser.Scene {
   // ----- Enemies -----
   // Angle is measured from straight down: 0 = down, positive = towards the right.
   shoot(x, y, tex, speed, angle) {
-    const s = this.enemyShots.create(x, y, tex);
+    const s = this.enemyShots.create(x, y, this.glowTexture(tex, 0xff4fd8));
+    s.body.setSize(s.width - 2 * SHOT_GLOW, s.height - 2 * SHOT_GLOW);
     s.setVelocity(Math.sin(angle) * speed, Math.cos(angle) * speed).setRotation(-angle);
   }
 
@@ -1327,8 +1363,8 @@ class Play extends Phaser.Scene {
     const tx = Phaser.Math.Clamp(this.player.x + Phaser.Math.Between(-50, 50), 40, W - 40);
     const ty = Phaser.Math.Clamp(this.player.y + Phaser.Math.Between(-40, 30), H * 0.5, H - 60);
     const mark = this.add.circle(tx, ty, 34, 0xff3b3b, 0.2).setStrokeStyle(2, 0xff3b3b, 0.8);
-    const ball = this.add.image(b.x, b.y, tex).setDepth(5);
-    const scale = ball.width < 30 ? 2 : 1;
+    const ball = this.add.image(b.x, b.y, this.glowTexture(tex, 0xff4fd8)).setDepth(5);
+    const scale = ball.width - 2 * SHOT_GLOW < 30 ? 2 : 1; // small shots drawn bigger
     ball.setScale(scale);
     this.tweens.add({ targets: ball, scale: scale * 1.7, duration: 500, yoyo: true }); // up and down: the arc
     this.tweens.add({ targets: ball, x: tx, y: ty, angle: 360, duration: 1000, onComplete: () => {

@@ -26,7 +26,7 @@ To go back to the built-in sprite, delete your PNG and run `node tools/sprites.j
   - Each boss has three frames of the same size: `<boss>0` and `<boss>1` (its idle animation) and `<boss>Hurt` (shown when it's hit). Replace all three together.
   - Each vehicle has frames `0` and `1` (legs or wheels in two positions), for Vega facing forward (`ride-...-f`), Vega turned back (`ride-...-b`), and that timeline's enemy rider both ways (`rideE-...`). The rider and the vehicle are one image.
 - **Repeating backgrounds:** roads (`road-...`) repeat top to bottom, so the top and bottom edges must join seamlessly; side-view scenery (`hills-...`, `ground-...`) repeats sideways, so the left and right edges must join. `hills-...` needs a see-through sky (the sky colour is behind it).
-- **Effects still work:** frozen enemies turn blue, burning ones orange, and anything hit flashes white, whatever the image.
+- **Effects still work:** frozen enemies turn blue, burning ones orange, and anything hit flashes white, whatever the image. Shots get a glow and a ring added around them in the game (pink for enemy shots, cyan for Vega's) so they stand out on every road: draw just the shot itself.
 - **Pixel art vs smooth art:** the game scales images with hard edges, which keeps pixel art crisp. Smooth, high-resolution art would look jagged; if you go that way, ask Claude to switch `pixelArt` off in `js/game.js`.
 
 ## Refreshing the templates

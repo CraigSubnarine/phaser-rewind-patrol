@@ -384,8 +384,8 @@ async function run(browser, name, options) {
         __step(1);
         seen.stars = Math.max(seen.stars, s.stars.filter(st => st.visible).length);
         for (const b of s.bullets.getChildren()) {
-          if (b.texture.key === 'axe') seen.axe = true;
-          if (b.texture.key === 'boomerang' && b.returning) seen.boomerangBack = true;
+          if (b.texture.key.startsWith('axe~')) seen.axe = true; // (shots use glowing copies of their sprite: axe~4ff0ff)
+          if (b.texture.key.startsWith('boomerang~') && b.returning) seen.boomerangBack = true;
         }
         if ([...s.enemies.getChildren(), s.boss].some(e => e?.burnUntil > s.t)) seen.burning = true;
       }

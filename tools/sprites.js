@@ -31,8 +31,9 @@ async function exportTemplates() {
     await page.click('#story .primary'); // starting a run makes sure every texture exists
     await page.waitForTimeout(800);
     const info = await page.evaluate(() => {
-      // Phaser also keeps unnamed textures (text, tile sprites) under random ids: skip those.
-      const keys = game.textures.getTextureKeys().filter(k => !/^[0-9a-f]{8}-[0-9a-f]{4}-/.test(k));
+      // Phaser also keeps unnamed textures (text, tile sprites) under random ids, and the game makes glowing copies of
+      // the shot sprites (key~color): skip those.
+      const keys = game.textures.getTextureKeys().filter(k => !/^[0-9a-f]{8}-[0-9a-f]{4}-/.test(k) && !k.includes('~'));
       const size = k => { const s = game.textures.get(k).getSourceImage(); return [s.width, s.height]; };
       return {
         sizes: Object.fromEntries(keys.map(k => [k, size(k)])),

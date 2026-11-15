@@ -16,7 +16,7 @@ const BONUS_CHANCE = 0.5; // chance that a mini-boss level leads into a bonus le
 const BONUS_PAY = 1;
 const COIN_CHANCE = 0.2; // chance that a defeated enemy drops a coin
 
-// Seven timelines. Each run's seed picks 5 of them, in a random order, for stages 1-50 (10 stages each). Stage 5 of
+// Eleven timelines, seven past and four future. Each run's seed picks 5 of them, in a random order, for stages 1-50 (10 stages each). Stage 5 of
 // each has a mid-boss, stage 10 the timeline's boss, who holds one of the missing time-drive parts. Every stage opens
 // with a card naming the timeline. Bosses fight in phases (`phases`: the attacks of each phase, see Play.bossAttack;
 // the next phase starts at 1/2 health for a mid-boss, at 2/3 and 1/3 for a main boss) and say a `taunts` line as
@@ -89,6 +89,43 @@ const ERAS = [
     boss: { key: 'trex', name: 'THE KING\nLIZARD', shot: 'orb', move: 'sway', laneColor: 0x2e8b3a,
       phases: [['charge', 'fan'], ['summon:C', 'charge', 'fan'], ['lanes', 'ring', 'charge']],
       taunts: ["ROOOAR! (IT HAS NEVER SEEN A HAT.)", "RAAWR! (THE BIG CATS COME RUNNING.)", "ROOOOOOAAAAR!"] } },
+  // The time drive overshoots into the future too.
+  { id: 'chrome', name: 'Chrome City', year: '2049 AD', road: 'road-chrome', bg: 0x0a0a1e, lines: 0xff4fd8, army: { G: 'patroldroid', S: 'sniperdrone', H: 'riotmech', C: 'streetpunk' },
+    shot: 'plasma',
+    part: 'HOLO LENS', vehicle: 'hoverbike', rider: { 9: 'A', G: '9', 5: 'B' }, sky: 0x1a0a3a, obstacle: 'barrier',
+    mid: { key: 'spidertank', name: 'THE SPIDER\nTANK', shot: 'plasma', move: 'sway',
+      phases: [['sweep', 'charge'], ['summon:G', 'mortar', 'sweep']],
+      taunts: ["TARGET ACQUIRED. LEGS: EIGHT. MERCY: ZERO.", "DEPLOYING PATROL UNITS. SKITTER SKITTER."] },
+    boss: { key: 'omni', name: 'OMNI\nROGUE MAINFRAME', shot: 'orb', move: 'teleport', laneColor: 0xff4fd8,
+      phases: [['lanes', 'aimed:plasma'], ['summon:S', 'spiral:plasma', 'lanes'], ['lanes', 'ring', 'wall:plasma']],
+      taunts: ["HELLO, OFFICER. YOUR FILE SAYS 1986. HOW QUAINT.", "DEPLOYING DRONES. PLEASE HOLD STILL.", "ERROR. ERROR. YOU WERE NOT SUPPOSED TO WIN."] } },
+  { id: 'waste', name: 'The Wasteland', year: '2150 AD', road: 'road-waste', bg: 0x2a1a0e, lines: 0xffb070, army: { G: 'roadraider', S: 'scavrifle', H: 'juggernaut', C: 'mutanthound' },
+    shot: 'scrap',
+    part: 'FUEL CELL', vehicle: 'buggy', rider: { 9: '0', G: '7', 5: '5' }, sky: 0xd08a4a, obstacle: 'tires',
+    mid: { key: 'crawler', name: 'THE SCRAP\nCRAWLER', shot: 'scrap', move: 'sway',
+      phases: [['charge', 'fan'], ['mortar', 'charge', 'fan']],
+      taunts: ["*CLANK* *GRIND* IT SMELLS OF OLD OIL.", "*SCREEECH* IT SPITS OUT HOT JUNK!"] },
+    boss: { key: 'kingscrap', name: 'KING SCRAP', shot: 'orb', move: 'sway',
+      phases: [['charge', 'sweep:scrap'], ['summon:C', 'mortar:scrap', 'fan:scrap'], ['charge', 'ring', 'sweep:scrap']],
+      taunts: ["NICE BOOTS, STRANGER. I'LL TAKE 'EM.", "PUPS! FETCH!", "NOBODY TAKES KING SCRAP'S ROAD!"] } },
+  { id: 'mars', name: 'Mars Colony', year: '2300 AD', road: 'road-mars', bg: 0x2a0e08, lines: 0xff8a5a, army: { G: 'minerbot', S: 'surveyor', H: 'haulermech', C: 'rockcrawler' },
+    shot: 'redbeam',
+    part: 'GRAVITY COIL', vehicle: 'rover', rider: { 9: '1', G: '1', 5: '6' }, sky: 0xd8a070, obstacle: 'redrock',
+    mid: { key: 'wyrm', name: 'THE DUST\nWYRM', shot: 'stone', move: 'teleport', laneColor: 0xc0603a,
+      phases: [['lanes', 'ring'], ['lanes', 'mortar', 'lanes']],
+      taunts: ["*THE GROUND RUMBLES...*", "*SHRRRAAAK!* IT BURSTS OUT OF THE DUST!"] },
+    boss: { key: 'drillwalker', name: 'THE DRILL\nWALKER', shot: 'orb', move: 'hover',
+      phases: [['spiral:redbeam'], ['summon:H', 'rain:stone', 'aimed:redbeam'], ['charge', 'ring', 'spiral:redbeam']],
+      taunts: ["UNAUTHORISED VISITOR. BEGINNING EXCAVATION.", "HAULERS, CLEAR THE SITE.", "DRILL SPEED: MAXIMUM."] } },
+  { id: 'star', name: 'The Star Empire', year: '3000 AD', road: 'road-star', bg: 0x05051a, lines: 0xc8a8ff, army: { G: 'trooper', S: 'marksman', H: 'battledroid', C: 'jettrooper' },
+    shot: 'bolt',
+    part: 'STAR CORE', vehicle: 'starfighter', rider: { 9: '6', G: '6', 5: '0' }, sky: 0x05051a, obstacle: 'asteroid',
+    mid: { key: 'cruiser', name: 'THE BATTLE\nCRUISER', shot: 'bolt', move: 'hover',
+      phases: [['wall', 'aimed'], ['wall', 'summon:C', 'sweep']],
+      taunts: ["ALL BATTERIES: OPEN FIRE.", "LAUNCH THE JET TROOPERS!"] },
+    boss: { key: 'zarnax', name: 'WARLORD\nZARNAX', shot: 'orb', move: 'teleport', laneColor: 0xff3b3b,
+      phases: [['aimed', 'spiral:bolt'], ['summon:G', 'lanes', 'fan:bolt'], ['ring', 'lanes', 'spiral:bolt', 'charge']],
+      taunts: ["A PRIMITIVE WITH A TIME DRIVE? HOW AMUSING.", "TROOPERS! BRING ME THAT HAT!", "ENOUGH! I WILL DEAL WITH YOU MYSELF!"] } },
 ];
 const ERA = Object.fromEntries(ERAS.map(e => [e.id, e]));
 
@@ -132,6 +169,7 @@ const BASE_STATS = {
   active: null, chargeMult: 1, broadside: 12, testudoMs: 6000, testudoShield: false, // active items
   sixShooter: 0, dynamite: 0, burn: 0, orbitals: 0, orbitRadius: 70, orbitSpeed: 3, lowHpDmg: 0, berserk: 0,
   axes: 0, axesReturn: false, boomerangs: 0, regen: 0, stageShield: false, stampedeMult: 1, dynamiteBurns: false,
+  homing: 0, drones: 0, molotovs: 0, coinChance: 1, drills: 0, waveHeal: 0, torpedoes: 0, // future gear
 };
 
 // General gear is sold in every timeline; timeline gear only in its own timeline, so each run's mix depends on
@@ -196,6 +234,30 @@ const UPGRADES = [
   { id: 'hide', era: 'stone', name: 'Mammoth Hide', desc: '+2 max HP (heals 2), but move 10% slower.', price: 16, max: 1, heal: 2, apply: p => { p.maxHp += 2; p.moveSpeed *= 0.9; } },
   { id: 'meteor', era: 'stone', name: 'Meteor Shower', active: { charge: 35, effect: 'meteor' }, price: 18, max: 1,
     desc: 'Active, charges with 35 kills: meteors rain down on your enemies for 3 s.' },
+
+  { id: 'smart', era: 'chrome', name: 'Smart Rounds', desc: 'Your shots curve towards the nearest enemy.', price: 16, max: 1, apply: p => { p.homing = 3; } },
+  { id: 'drone', era: 'chrome', name: 'Drone Buddy', desc: 'A drone hovers over you and shoots at the nearest enemy.', price: 20, max: 2, apply: p => { p.drones += 1; } },
+  { id: 'cyberarm', era: 'chrome', name: 'Cyber Arm', desc: 'Fire 15% faster and hit 25% harder.', price: 14, max: 2, apply: p => { p.fireDelay *= 0.85; p.dmg += 0.25; } },
+  { id: 'emp', era: 'chrome', name: 'EMP Blast', active: { charge: 30, effect: 'emp' }, price: 18, max: 1,
+    desc: 'Active, charges with 30 kills: a pulse damages every enemy on screen, freezes them for 3 s and wipes out their shots.' },
+
+  { id: 'scraparmor', era: 'waste', name: 'Scrap Armor', desc: '+1 max HP and a 15% chance to shrug off a hit. Heals 1.', price: 16, max: 2, heal: 1, apply: p => { p.maxHp += 1; p.armor += 0.15; } },
+  { id: 'molotov', era: 'waste', name: 'Molotov', desc: 'Every 3 s, throw a bottle that bursts into flames and sets enemies alight.', price: 16, max: 2, apply: p => { p.molotovs += 1; } },
+  { id: 'scavenger', era: 'waste', name: 'Scavenger', desc: 'Enemies drop coins twice as often.', price: 14, max: 1, apply: p => { p.coinChance *= 2; } },
+  { id: 'nitro', era: 'waste', name: 'Nitro', active: { charge: 25, effect: 'nitro' }, price: 16, max: 1,
+    desc: 'Active, charges with 25 kills: for 5 s, fire three times as fast and move twice as fast.' },
+
+  { id: 'drill', era: 'mars', name: 'Plasma Drill', desc: 'Every 1.2 s, fire a drill bolt that pierces everything for 4x damage.', price: 16, max: 2, apply: p => { p.drills += 1; } },
+  { id: 'o2tank', era: 'mars', name: 'O2 Tank', desc: 'Heal 1 HP after every wave.', price: 20, max: 1, apply: p => { p.waveHeal = 1; } },
+  { id: 'jetpack', era: 'mars', name: 'Jetpack', desc: 'Move 25% faster and stay untouchable 30% longer after a hit.', price: 12, max: 2, apply: p => { p.moveSpeed *= 1.25; p.invuln *= 1.3; } },
+  { id: 'orbital', era: 'mars', name: 'Orbital Strike', active: { charge: 40, effect: 'orbital' }, price: 20, max: 1,
+    desc: 'Active, charges with 40 kills: a beam from orbit hits every enemy on screen, and the boss.' },
+
+  { id: 'blaster', era: 'star', name: 'Blaster Rifle', desc: '+100% damage, but fire 15% slower.', price: 16, max: 2, apply: p => { p.dmg += 1; p.fireDelay *= 1.15; } },
+  { id: 'deflector', era: 'star', name: 'Deflector', desc: 'A shield that blocks 1 hit, recharging every 10 s.', price: 18, max: 2, apply: p => { p.shieldMax += 1; } },
+  { id: 'torpedo', era: 'star', name: 'Photon Torpedo', desc: 'Every 2.5 s, fire a torpedo that homes in on an enemy and explodes.', price: 18, max: 2, apply: p => { p.torpedoes += 1; } },
+  { id: 'blackhole', era: 'star', name: 'Black Hole', active: { charge: 35, effect: 'blackhole' }, price: 20, max: 1,
+    desc: 'Active, charges with 35 kills: a black hole pulls enemies together, then collapses on them.' },
 ];
 const UPGRADE = Object.fromEntries(UPGRADES.map(u => [u.id, u]));
 
@@ -222,6 +284,14 @@ const COMBOS = [
   { id: 'returnaxe', name: 'Returning Axes', needs: ['axes', 'boomerang'], desc: 'Throwing axes come back like boomerangs.', apply: p => { p.axesReturn = true; } },
   { id: 'megastampede', name: 'Mammoth Stampede', needs: ['stampede', 'hide'], desc: 'Stampede deals double damage.', apply: p => { p.stampedeMult = 2; } },
   { id: 'shieldmaiden', name: 'Shield Maiden', needs: ['hearth', 'scutum'], desc: 'Finishing a level also refills your shield.', apply: p => { p.stageShield = true; } },
+  { id: 'firebomb', name: 'Firebomb', needs: ['molotov', 'fire'], desc: 'Molotovs fly twice as often.', apply: p => { p.molotovs *= 2; } },
+  { id: 'scrapyard', name: 'Scrapyard', needs: ['scavenger', 'map'], desc: 'Coins are worth 50% more.', apply: p => { p.coinMult += 0.5; } },
+  { id: 'torpedobay', name: 'Torpedo Bay', needs: ['torpedo', 'cannon'], desc: 'Photon torpedoes fire twice as often.', apply: p => { p.torpedoes *= 2; } },
+  { id: 'forcefield', name: 'Force Field', needs: ['deflector', 'scutum'], desc: '+1 more shield charge.', apply: p => { p.shieldMax += 1; } },
+  { id: 'rocketboots', name: 'Rocket Boots', needs: ['jetpack', 'sneakers'], desc: 'Move 30% faster again.', apply: p => { p.moveSpeed *= 1.3; } },
+  { id: 'droneswarm', name: 'Drone Swarm', needs: ['drone', 'smart'], desc: 'One more drone.', apply: p => { p.drones += 1; } },
+  { id: 'overclock', name: 'Overclock', needs: ['cyberarm', 'rapid'], desc: 'Fire 25% faster again.', apply: p => { p.fireDelay *= 0.75; } },
+  { id: 'lifesupport', name: 'Life Support', needs: ['o2tank', 'hearth'], desc: '+1 max HP, and Hearth Fire heals 1 more.', apply: p => { p.maxHp += 1; p.regen += 1; } },
 ];
 
 // Vega's stats from the upgrades owned ({ id: copies }). Combos apply after every upgrade, so they can scale them.

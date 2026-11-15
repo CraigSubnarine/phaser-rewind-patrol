@@ -72,6 +72,7 @@ class Play extends Phaser.Scene {
     this.shieldRing = this.add.graphics().setDepth(3);
     this.hpBars = this.add.graphics().setDepth(3); // health bars over soldiers that take more than one hit
     this.partners = [];
+    this.drones = []; // Drone Buddy
 
     // Everything about this run. The seeded generator rolls the shop, so the same seed gives the same offers.
     this.rng = new Phaser.Math.RandomDataGenerator([app.seed]);
@@ -88,6 +89,7 @@ class Play extends Phaser.Scene {
       target: { x: this.player.x, y: this.player.y },
       charge: 0, frozenUntil: 0, testudoUntil: 0, streamTimers: [], sideMode: null, nextObstacle: 0,
       nextAxe: 0, nextBoomerang: 0, orbitAngle: 0, chargeLockUntil: 0, endless: false,
+      nextDrone: 0, nextMolotov: 0, nextDrill: 0, nextTorpedo: 0, nitroUntil: 0, // future gear
       bonus: null, nextRider: 0, hudSecs: 0, // bonus levels
       et: 0, // enemy clock: like t, but it stops while the Siren has enemies frozen
       hazards: [], // bosses' lane attacks: { x0, x1, until, bar }
@@ -107,6 +109,7 @@ class Play extends Phaser.Scene {
     this.P = stats;
     this.combos = combos;
     while (this.partners.length < stats.partners) this.partners.push(this.add.image(this.player.x, this.player.y, 'partner').setDepth(2));
+    while (this.drones.length < stats.drones) this.drones.push(this.add.image(this.player.x, this.player.y - 70, 'drone').setDepth(3));
     if (this.hp > stats.maxHp) this.hp = stats.maxHp;
     return unlocked;
   }
@@ -123,8 +126,9 @@ class Play extends Phaser.Scene {
     this.owned[u.id] = (this.owned[u.id] || 0) + 1;
     const unlocked = this.refreshStats();
     if (u.heal) this.hp = Math.min(this.hp + u.heal, this.P.maxHp);
-    if (u.id === 'scutum') this.shield = this.P.shieldMax;
+    if (u.id === 'scutum' || u.id === 'deflector') this.shield = this.P.shieldMax;
     this.updateHud();
+    updateItemBtn(); // (shown once the shop closes; also right away if an item is bought mid-wave)
     return unlocked;
   }
 
@@ -182,10 +186,7 @@ class Play extends Phaser.Scene {
       if (P.testudoShield) this.shield = P.shieldMax;
       jingle([523, 659, 784]);
     } else if (effect === 'trebuchet') { // a boulder lands on the boss (or where the enemies are) in a huge blast
-      const foes = this.enemies.getChildren().filter(e => e.x > 0 && e.x < W && e.y > 0 && e.y < H);
-      const avg = k => foes.reduce((sum, e) => sum + e[k], 0) / foes.length;
-      const x = this.boss?.ready ? this.boss.x : foes.length ? avg('x') : W / 2;
-      const y = this.boss?.ready ? this.boss.y : foes.length ? avg('y') : 260;
+      const { x, y } = this.hotspot();
       const rock = this.add.image(x, -80, 'boulder').setScale(4).setDepth(5);
       this.tweens.add({ targets: rock, y, angle: 360, duration: 500, ease: 'Quad.easeIn', onComplete: () => {
         rock.destroy();
@@ -250,11 +251,79 @@ class Play extends Phaser.Scene {
           this.tweens.add({ targets: rock, x, y, duration: 350, ease: 'Quad.easeIn', onComplete: () => { rock.destroy(); this.explode(x, y, 85, 5 * this.dmgNow(), false); } });
         });
       }
+    } else if (effect === 'emp') { // a pulse: damages and freezes every enemy on screen, wipes out their shots
+      this.banner('EMP!', 1000, 26);
+      this.frozenUntil = Math.max(this.frozenUntil, this.t + 3000);
+      this.clearShots();
+      const ring = this.add.circle(this.player.x, this.player.y, 40, 0x4ff0ff, 0.3).setStrokeStyle(4, 0x4ff0ff).setDepth(5);
+      this.tweens.add({ targets: ring, scale: 18, alpha: 0, duration: 600, onComplete: () => ring.destroy() });
+      for (const e of this.enemies.getChildren().slice()) if (this.isOnScreen(e)) this.damage(e, 4 * this.dmgNow(), false);
+      if (this.boss?.ready) this.damage(this.boss, 10 * this.dmgNow(), true);
+      jingle([1568, 784, 392]);
+    } else if (effect === 'nitro') { // 5 s of triple fire rate and double speed (see fireDelay and update)
+      this.banner('NITRO!', 1000, 26);
+      this.nitroUntil = this.t + 5000;
+      jingle([392, 523, 784, 1046]);
+    } else if (effect === 'orbital') { // a beam from orbit on every enemy on screen, and on the boss
+      this.banner('ORBITAL STRIKE!', 1000, 22);
+      this.cameras.main.flash(200, 220, 255, 255);
+      boom(500, 0.12);
+      const targets = this.enemies.getChildren().filter(e => this.isOnScreen(e));
+      if (this.boss?.ready) targets.push(this.boss);
+      targets.forEach((e, i) => this.time.delayedCall(i * 40, () => {
+        if (!e.active) return;
+        const beam = this.add.rectangle(e.x, e.y / 2, 26, e.y, 0xb0ffff, 0.9).setDepth(6);
+        this.tweens.add({ targets: beam, alpha: 0, scaleX: 0.2, duration: 300, onComplete: () => beam.destroy() });
+        this.damage(e, (e === this.boss ? 25 : 10) * this.dmgNow(), e === this.boss);
+      }));
+    } else if (effect === 'blackhole') { // pulls every enemy on screen into one spot, then collapses on them
+      this.banner('BLACK HOLE!', 1000, 26);
+      const { x, y } = this.hotspot();
+      for (const e of this.enemies.getChildren()) {
+        if (!this.isOnScreen(e)) continue;
+        Object.assign(e, { pullFrom: e.mode, mode: 'pulled', pullX: x, pullY: y, windup: 0, snipeAt: 0 });
+        e.clearTint();
+      }
+      const hole = this.add.circle(x, y, 12, 0x000000).setStrokeStyle(3, 0xc77dff).setDepth(4);
+      this.tweens.add({ targets: hole, scale: 6, angle: 360, duration: 1400, ease: 'Sine.easeIn', onComplete: () => {
+        hole.destroy();
+        this.cameras.main.shake(300, 0.015);
+        this.explode(x, y, 170, 15 * this.dmgNow(), false);
+        for (const e of this.enemies.getChildren()) if (e.mode === 'pulled') this.release(e);
+      } });
+      boom(700, 0.1);
     }
     this.charge = 0;
     this.chargeLockUntil = this.t + 3500; // its own kills (some land a moment later) don't refill it
     updateItemBtn();
     return true;
+  }
+
+  // Where big blasts land: on the boss, or in the middle of the enemies on screen.
+  hotspot() {
+    const foes = this.enemies.getChildren().filter(e => this.isOnScreen(e));
+    const avg = k => foes.reduce((sum, e) => sum + e[k], 0) / foes.length;
+    if (this.boss?.ready) return { x: this.boss.x, y: this.boss.y };
+    return foes.length ? { x: avg('x'), y: avg('y') } : { x: W / 2, y: 260 };
+  }
+
+  // A soldier the Black Hole let go: back to its place in the formation (or its ride), or off down the screen.
+  release(e) {
+    if (e.pullFrom === 'ride' || e.pullFrom === 'ram') Object.assign(e, { mode: 'ride', fromX: e.x, baseY: e.y, enter: 0 });
+    else if (e.homeX !== undefined) Object.assign(e, { mode: 'formation', fromX: e.x, fromY: e.y, enter: 0 });
+    else return void Object.assign(e, { mode: 'dive', vx: 0, vy: 200 });
+    this.tweens.add({ targets: e, enter: 1, duration: 1200, ease: 'Sine.easeOut' });
+  }
+
+  // The nearest enemy (or boss) on screen to a point, or null. `skip`: ones a piercing shot has already hit.
+  nearestFoe(x, y, skip) {
+    let best = null, bd = Infinity;
+    for (const e of [...this.enemies.getChildren(), this.boss?.ready ? this.boss : null]) {
+      if (!e || !this.isOnScreen(e) || skip?.has(e)) continue;
+      const d = Phaser.Math.Distance.Squared(x, y, e.x, e.y);
+      if (d < bd) { bd = d; best = e; }
+    }
+    return best;
   }
 
   // Four cards: up to 2 pieces of this timeline's gear, the rest general gear, nothing already maxed out.
@@ -400,6 +469,10 @@ class Play extends Phaser.Scene {
   // A wave is done: a few coins, and straight on to the next wave of the level.
   waveCleared() {
     this.waveActive = false;
+    if (this.P.waveHeal && this.hp > 0 && this.hp < this.P.maxHp) { // O2 Tank
+      this.hp = Math.min(this.hp + this.P.waveHeal, this.P.maxHp);
+      this.toast(`+${this.P.waveHeal} HP`, this.player.x, this.player.y - 50, '#4ff0ff');
+    }
     this.addCoins(2 + this.era);
     this.time.delayedCall(800, () => { if (this.hp > 0) this.startStage(this.stage + 1); });
   }
@@ -564,9 +637,13 @@ class Play extends Phaser.Scene {
     return P.dmg * (this.hp >= P.maxHp ? 1 + P.fullHpDmg : 1) * (this.hp === 1 ? 1 + P.lowHpDmg : 1);
   }
 
-  // Berserker Rage: shoot faster the more HP you're missing (never more than about 3x).
+  // Berserker Rage: shoot faster the more HP you're missing (never more than about 3x). Nitro: 3x for 5 s.
   fireDelay() {
-    return this.P.fireDelay * Math.max(0.35, 1 - this.P.berserk * (this.P.maxHp - this.hp));
+    return this.P.fireDelay * Math.max(0.35, 1 - this.P.berserk * (this.P.maxHp - this.hp)) / (this.t < this.nitroUntil ? 3 : 1);
+  }
+
+  moveSpeed() {
+    return this.P.moveSpeed * (this.t < this.nitroUntil ? 2 : 1);
   }
 
   // On foot, a forgiving hitbox: just Vega's shoulders and cap. Sized from the sprite, so your own art works too.
@@ -589,7 +666,7 @@ class Play extends Phaser.Scene {
       this.nextFire = this.t + this.fireDelay();
       this.volleys++;
       for (let i = 0; i < P.shots; i++) { // Extra Barrel fans the shots out
-        this.spawnBullet(x, y, 'laser', aim + (i - (P.shots - 1) / 2) * 0.12, { dmg: this.dmgNow(), pierce: P.pierce, bounce: P.bounce });
+        this.spawnBullet(x, y, 'laser', aim + (i - (P.shots - 1) / 2) * 0.12, { dmg: this.dmgNow(), pierce: P.pierce, bounce: P.bounce, home: P.homing });
       }
       if (P.sixShooter && this.volleys % 6 === 0) { // Six-Shooter: a wide fan every 6th shot
         for (let i = 0; i < P.sixShooter; i++) {
@@ -622,6 +699,26 @@ class Play extends Phaser.Scene {
       const b = this.spawnBullet(x, y, 'boomerang', aim + (Math.random() - 0.5) * 0.6, { dmg: 1.5 * this.dmgNow(), pierce: 99, bounce: 0, speed: 520, scale: 1.6 });
       Object.assign(b, { spin: 720, returnAt: this.t + 650 });
     }
+    if (P.molotovs && this.t >= this.nextMolotov) { // Molotov: a spinning bottle that bursts into flames
+      this.nextMolotov = this.t + 3000 / P.molotovs;
+      this.spawnBullet(x, y, 'molotov', aim, { dmg: 2 * this.dmgNow(), pierce: 0, bounce: 0, explode: 80, burns: true, speed: 380, scale: 1.4 }).spin = 600;
+    }
+    if (P.drills && this.t >= this.nextDrill) { // Plasma Drill: a bolt that pierces everything
+      this.nextDrill = this.t + 1200 / P.drills;
+      this.spawnBullet(x, y, 'drillbolt', aim, { dmg: 4 * this.dmgNow(), pierce: 99, bounce: 0, speed: 800, scale: 1.4 });
+    }
+    if (P.torpedoes && this.t >= this.nextTorpedo) { // Photon Torpedo: homes in on an enemy and explodes
+      this.nextTorpedo = this.t + 2500 / P.torpedoes;
+      this.spawnBullet(x, y, 'torpedo', aim, { dmg: 4 * this.dmgNow(), pierce: 0, bounce: 0, explode: 70, home: 5, speed: 380, scale: 1.4 });
+      beep(1000, 60, 0.03);
+    }
+    if (this.drones.length && this.t >= this.nextDrone) { // Drone Buddy: each drone shoots at the nearest enemy
+      this.nextDrone = this.t + 600;
+      for (const d of this.drones) {
+        const tgt = this.nearestFoe(d.x, d.y);
+        if (tgt) this.spawnBullet(d.x, d.y, 'laser', Math.atan2(tgt.y - d.y, tgt.x - d.x), { dmg: 0.8 * this.dmgNow(), pierce: 0, bounce: 0 });
+      }
+    }
   }
 
   // Angle in radians: -PI/2 is straight up.
@@ -629,7 +726,7 @@ class Play extends Phaser.Scene {
     const speed = o.speed ?? this.P.bulletSpeed;
     const b = this.bullets.create(x, y, tex).setRotation(angle + Math.PI / 2).setScale(o.scale ?? 1);
     b.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
-    return Object.assign(b, { dmg: o.dmg, pierce: o.pierce, bounce: o.bounce, explode: o.explode ?? 0, cannon: !!o.cannon, hits: new Set() });
+    return Object.assign(b, { dmg: o.dmg, pierce: o.pierce, bounce: o.bounce, explode: o.explode ?? 0, cannon: !!o.cannon, burns: !!o.burns, home: o.home ?? 0, hits: new Set() });
   }
 
   // A shot hits an enemy or the boss. Piercing shots keep going; each shot hits a given target once per bounce.
@@ -640,7 +737,7 @@ class Play extends Phaser.Scene {
     b.hits.add(target);
     if (this.P.burn) this.ignite(target);
     this.damage(target, b.dmg, isBoss, b.cannon);
-    if (b.explode) this.explode(b.x, b.y, b.explode, b.dmg, b.cannon);
+    if (b.explode) this.explode(b.x, b.y, b.explode, b.dmg, b.cannon, b.burns);
     if (b.pierce > 0) b.pierce--;
     else b.destroy();
   }
@@ -717,9 +814,9 @@ class Play extends Phaser.Scene {
         const { x, y } = e;
         this.time.delayedCall(90, () => this.explode(x, y, 60 * this.P.dynamite, 2 * this.dmgNow(), false, this.P.dynamiteBurns));
       }
-      const roll = Math.random();
-      if (roll < COIN_CHANCE || ROLES[e.role].coin) this.drop('coin', e.x, e.y);
-      else if (roll < COIN_CHANCE + 0.03) this.drop('donut', e.x, e.y); // rare: heals 1 HP
+      const roll = Math.random(), coin = COIN_CHANCE * this.P.coinChance; // Scavenger doubles it
+      if (roll < coin || ROLES[e.role].coin) this.drop('coin', e.x, e.y);
+      else if (roll < coin + 0.03) this.drop('donut', e.x, e.y); // rare: heals 1 HP
     }
     e.destroy();
   }
@@ -857,7 +954,7 @@ class Play extends Phaser.Scene {
       this.tweens.add({ targets: this.road, alpha: 1, duration: 300 });
       this.setStreaks(false);
       this.banner('NEON CITY\n1986', 1800, 28);
-      this.tweens.add({ targets: [this.player, ...this.partners], y: -120, delay: 600, duration: 2200 });
+      this.tweens.add({ targets: [this.player, ...this.partners, ...this.drones], y: -120, delay: 600, duration: 2200 });
     });
     this.time.delayedCall(5600, () => endGame(true, this));
   }
@@ -918,8 +1015,9 @@ class Play extends Phaser.Scene {
       const k = this.keys;
       const kx = (k.RIGHT.isDown || k.D.isDown) - (k.LEFT.isDown || k.A.isDown);
       const ky = (k.DOWN.isDown || k.S.isDown) - (k.UP.isDown || k.W.isDown);
-      if (kx || ky) this.setTarget(this.target.x + kx * P.moveSpeed * dt, this.target.y + ky * P.moveSpeed * dt);
-      const dx = this.target.x - this.player.x, dy = this.target.y - this.player.y, dist = Math.hypot(dx, dy), step = P.moveSpeed * dt;
+      const speed = this.moveSpeed();
+      if (kx || ky) this.setTarget(this.target.x + kx * speed * dt, this.target.y + ky * speed * dt);
+      const dx = this.target.x - this.player.x, dy = this.target.y - this.player.y, dist = Math.hypot(dx, dy), step = speed * dt;
       if (dist > step) this.player.setPosition(this.player.x + dx / dist * step, this.player.y + dy / dist * step);
       else this.player.setPosition(this.target.x, this.target.y);
       this.fire();
@@ -931,6 +1029,13 @@ class Play extends Phaser.Scene {
       pt.x += (this.player.x + (i % 2 ? 62 : -62) - pt.x) * ease;
       pt.y += (this.player.y + 14 - pt.y) * ease;
     });
+    // Drones hover over him, drifting side to side.
+    this.drones.forEach((d, i) => {
+      const ease = Math.min(1, dt * 5), a = this.t / 600 + i * Math.PI;
+      d.x += (this.player.x + Math.cos(a) * 46 - d.x) * ease;
+      d.y += (this.player.y - 70 + Math.sin(a) * 12 - d.y) * ease;
+      d.setVisible(this.player.active);
+    });
 
     // Scutum: recharge one shield charge at a time.
     if (this.shield < P.shieldMax) {
@@ -939,14 +1044,15 @@ class Play extends Phaser.Scene {
     this.shieldRing.clear();
     if (this.player.active && this.t < this.testudoUntil) this.shieldRing.lineStyle(5, 0xffd23b, 0.8).strokeCircle(this.player.x, this.player.y + 8, 50);
     if (this.shield > 0 && this.player.active) this.shieldRing.lineStyle(3, 0x4ff0ff, 0.6).strokeCircle(this.player.x, this.player.y + 8, 44);
+    if (this.player.active && this.t < this.nitroUntil) this.shieldRing.lineStyle(4, 0xff8a2a, 0.8).strokeCircle(this.player.x, this.player.y + 8, 56);
 
     // Enemy tints: blue while the Siren has them frozen (they stand still and don't shoot), orange while burning.
-    // Burning (Fire) does steady damage for its 3 s.
+    // Burning (Fire, Molotov, Wildfire) does steady damage for its 3 s, more with more copies of Fire.
     for (const e of [...this.enemies.getChildren(), this.boss].filter(Boolean)) {
       const burning = e.burnUntil > this.t, tint = frozen ? 0x88ccff : burning ? 0xff9944 : 0;
       if (tint) e.setTint(tint);
       else if (e.isTinted && (e.tintTopLeft === 0x88ccff || e.tintTopLeft === 0xff9944)) e.clearTint();
-      if (burning && P.burn) this.damage(e, 2 * P.burn * P.dmg * dt, e === this.boss, false, true);
+      if (burning) this.damage(e, 2 * Math.max(1, P.burn) * P.dmg * dt, e === this.boss, false, true);
     }
     if (!frozen) {
       this.updateEnemies(dt);
@@ -974,6 +1080,15 @@ class Play extends Phaser.Scene {
       if (bounced) { b.bounce--; b.hits.clear(); b.setRotation(Math.atan2(v.y, v.x) + Math.PI / 2); }
     }
     for (const b of this.bullets.getChildren().slice()) {
+      if (b.home) { // Smart Rounds and Photon Torpedoes turn towards the nearest enemy (b.home: radians per second)
+        const tgt = this.nearestFoe(b.x, b.y, b.hits), v = b.body.velocity;
+        if (tgt) {
+          const a = Math.atan2(v.y, v.x), turn = Phaser.Math.Angle.Wrap(Math.atan2(tgt.y - b.y, tgt.x - b.x) - a);
+          const na = a + Phaser.Math.Clamp(turn, -b.home * dt, b.home * dt), speed = v.length();
+          v.set(Math.cos(na) * speed, Math.sin(na) * speed);
+          b.setRotation(na + Math.PI / 2);
+        }
+      }
       if (b.spin) b.angle += b.spin * dt;
       if (b.returnAt && this.t > b.returnAt && this.player.active) { // boomerangs (and Returning Axes) fly back to Vega
         if (!b.returning) { b.returning = true; b.hits.clear(); }
@@ -1040,6 +1155,10 @@ class Play extends Phaser.Scene {
           Object.assign(e, { mode: 'formation', fromX: e.homeX, fromY: -60, enter: 0 });
           this.tweens.add({ targets: e, enter: 1, duration: 1200, ease: 'Sine.easeOut' });
         }
+      } else if (e.mode === 'pulled') { // sucked into the Black Hole
+        const ease = Math.min(1, dt * 3);
+        e.x += (e.pullX - e.x) * ease;
+        e.y += (e.pullY - e.y) * ease;
       } else if (e.mode === 'ride') { // weaving about their spot on the ground band
         e.x = Phaser.Math.Linear(e.fromX, e.homeX + Math.sin(this.et / 900 + e.phase) * 40, e.enter);
         e.y = Phaser.Math.Clamp(e.baseY + Math.sin(this.et / 650 + e.phase) * 70, BAND_TOP, H - 34);

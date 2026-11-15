@@ -74,6 +74,10 @@ function describe({ sizes, eras }) {
     row('axe', "Throwing axe (spins). Also Scandinavia's enemy shot."),
     row('boomerang', 'Bone Boomerang (spins).'),
     row('bull', 'Stampede cattle, seen from above, facing up.'),
+    row('drone', 'Drone Buddy, seen from above.'),
+    row('drillbolt', 'Plasma Drill bolt (points up).'),
+    row('torpedo', 'Photon Torpedo (points up).'),
+    row('molotov', 'Molotov bottle (spins).'),
   ]);
   md += '## Pickups and effects\n\n' + table([
     row('coin', 'Coin.'), row('donut', 'Donut (heals 1).'), row('coffee', 'Coffee (heals fully).'), row('part', 'Time-drive part.'),

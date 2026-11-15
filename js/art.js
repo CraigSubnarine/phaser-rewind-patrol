@@ -4,7 +4,7 @@
 const PAL = {
   0: '#000000', 1: '#ffffff', 2: '#ff3b3b', 3: '#3b7bff', 4: '#ffd23b', 5: '#7d7d8c', 6: '#c8c8d4', 7: '#6b3e1f',
   8: '#f0b98a', 9: '#1b1b2f', A: '#ff4fd8', B: '#4ff0ff', C: '#2e8b3a', D: '#b5651d', E: '#8a1c1c', F: '#4b4b63',
-  G: '#3a56d4', H: '#8b3fbf', I: '#c77dff',
+  G: '#3a56d4', H: '#8b3fbf', I: '#c77dff', J: '#ff8a2a', K: '#9dff4f',
 };
 const ART = {
   legionary: ['.....22.....', '....2222....', '...444444...', '..44888844..', '...408804...', '....8888....',
@@ -114,6 +114,60 @@ Object.assign(ART, {
               '...88..88.....', '...88..88.....'],
 });
 
+// The four future timelines: armies (same roles and sizes as above), shots, and Vega's future gear.
+Object.assign(ART, {
+  // Chrome City 2049: patrol droid, sniper drone, street punk, riot mech
+  patroldroid: ['....5555....', '...566665...', '...5BBBB5...', '...566665...', '....5555....', '.....55.....',
+                '..66666666..', '.5666AA6665.', '.5666666665.', '..55555555..', '...5....5...', '...6....6...'],
+  sniperdrone: ['6..........6', '66........66', '.6555555556.', '..56666665..', '..56622665..', '..56622665..',
+                '..56666665..', '...555555...', '.....55.....', '.....55.....', '.....55.....', '.....BB.....'],
+  streetpunk: ['.....AA.....', '.....AA.....', '....AAAA....', '...888888...', '...800008...', '....8888....',
+               '..00000000..', '.800A00A008.', '.8000000008.', '..GGGGGGGG..', '...G....G...', '...0....0...'],
+  riotmech: ['.....6666.....', '....666666....', '....6BBBB6....', '....666666....', '.....5555.....', '.GGGG666666...',
+             'G3333G666665..', 'G3113G666665..', 'G3113G6AA665..', 'G3113G666665..', 'G3333G666665..', '.GGGG555555...',
+             '.....55..55...', '.....66..66...'],
+  // The Wasteland 2150: road raider, scav rifleman, mutant hound, scrap juggernaut
+  roadraider: ['...777777...', '..77777777..', '..7BB77BB7..', '..88888888..', '..88777788..', '...877778...',
+               '5.DDDDDDDD.5', '55D55DD55D55', '.8DDDDDDDD8.', '..77777777..', '...7....7...', '...0....0...'],
+  scavrifle: ['....DDDD....', '...DDDDDD...', '..DD8888DD..', '..D808808D..', '...D8888D...', '..77777777.6',
+              '.8777777778.', '.87777777755', '..7777777..5', '..5555555..5', '...5....5...', '...0....0...'],
+  mutanthound: ['.7........7.', '.77......77.', '.7777777777.', '77K777777K77', '777777777777', '.7777007777.',
+                '..71011017..', '..77777777..', '..7.7777.7..', '..7.7777.7..', '.77.7..7.77.', '.00.0..0.00.'],
+  juggernaut: ['....555555....', '...56666665...', '...52255225...', '...56666665...', '....555555....', '.55DDDDDDDD55.',
+               '5665D5555D5665', '5665D5665D5665', '.55.D5555D.55.', '.88.DDDDDD.88.', '.88.777777.88.', '....77..77....',
+               '....55..55....', '...555..555...'],
+  // Mars Colony 2300: mining bot, surveyor drone, rock crawler, hauler mech
+  minerbot: ['....1111....', '...444444...', '..44000044..', '..440BB044..', '..44000044..', '..44444444..',
+             '.5.555555.5.', '.5544444455.', '.5.4D44D4.5.', '...444444...', '..55....55..', '.555....555.'],
+  surveyor: ['.....11.....', '.....55.....', '....6666....', '..66666666..', '.6666226666.', '.6662222666.',
+             '.6666226666.', '..66666666..', '...5.55.5...', '..5..55..5..', '.....22.....', '.....22.....'],
+  rockcrawler: ['..E......E..', '...E....E...', '..DDDDDDDD..', '.DD2DDDD2DD.', '.DDDDDDDDDD.', 'E.DDEDDEDD.E',
+                '.EDDDDDDDDE.', 'E.DDEDDEDD.E', '.EDDDDDDDDE.', 'E..DDDDDD..E', '....D..D....', '...E....E...'],
+  haulermech: ['....DDDDDD....', '...DDDDDDDD...', '...D1BBBB1D...', '...DDDDDDDD...', '.55..5555..55.', '5555DDDDDD5555',
+               '5..5D4444D5..5', '5..5D4004D5..5', '55.5D4444D5.55', '....DDDDDD....', '....D5..5D....', '...DD5..5DD...',
+               '...55....55...', '..555....555..'],
+  // The Star Empire 3000 AD: space trooper, marksman, jet trooper, battle droid
+  trooper: ['....6666....', '...666666...', '..66000066..', '..60BBBB06..', '..66666666..', '...665566...',
+            '..66666666..', '.6H666666H6.', '.6H66HH66H6.', '..66666666..', '...6....6...', '...5....5...'],
+  marksman: ['....HHHH....', '...HHHHHH...', '..HH2222HH..', '..HHHHHHHH..', '...HHHHHH..6', '..66666666.6',
+             '.H66666666H6', '.H66666666H5', '..666HH666.5', '..66666666.5', '...6....6...', '...5....5...'],
+  jettrooper: ['....6666....', '...666666...', '..66BBBB66..', '..66666666..', '...666666...', '.5566666655.',
+               '.5566666655.', '.55.6666.55.', '.55.6..6.55.', '.4..6..6..4.', '.J..5..5..J.', '.4........4.'],
+  battledroid: ['.....5555.....', '....555555....', '....552255....', '....555555....', '.....5555.....', '......55......',
+                '..5555555555..', '.55.FFFFFF.55.', '.5..F5FF5F..5.', '.5..FFFFFF..5.', '.2..F5FF5F..2.', '....FFFFFF....',
+                '....55..55....', '...555..555...'],
+  // Their shots (point down)
+  plasma: ['.A.', 'ABA', 'B1B', 'ABA', '.A.'],
+  scrap: ['.555.', '56665', '56.65', '56665', '.555.'],
+  redbeam: ['.2.', '2A2', '2A2', '212', '212', '.2.'],
+  bolt: ['.C.', 'CKC', 'K1K', 'K1K', 'CKC', '.C.'],
+  // Vega's future gear: Plasma Drill bolt and Photon Torpedo (point up), the Molotov (spins), the Drone Buddy
+  drillbolt: ['..1..', '.1B1.', '.BIB.', 'BIBIB', 'IBIBI', '.HHH.', '..H..'],
+  torpedo: ['.111.', '1BBB1', '1B1B1', '1BBB1', '.111.', '..B..', '..A..'],
+  molotov: ['..J..', '..4..', '..1..', '.D1D.', 'DDDDD', 'D1DDD', 'DDDDD', '.DDD.'],
+  drone: ['B.....B', '.B...B.', '..666..', '.66B66.', '..666..', '.B...B.', 'B.....B'],
+});
+
 // Officer Vega seen from directly above, facing up: pistol held out front in both hands, arms, shoulders,
 // and the police cap (black brim, gold badge). The feet are added separately so they can step.
 const VEGA = [
@@ -153,6 +207,7 @@ const PIXEL = {
   vega0: 5, vega1: 5, vega2: 5, partner: 3,
   spear: 3, arrow: 3, cannonball: 3, ink: 3, orb: 3, laser: 3, arrowUp: 3, coin: 3, spark: 2, streak: 2,
   bullet: 3, shuriken: 3, axe: 3, stone: 3, icicle: 3, dynamite: 3,
+  plasma: 3, scrap: 3, redbeam: 3, bolt: 3, drillbolt: 3, torpedo: 3, molotov: 3,
 };
 
 // ---------- Side view (vehicle stages): riders on era vehicles, all facing right ----------
@@ -189,12 +244,26 @@ const RAPTOR = [ // a running raptor for the Stone Age: legs apart, then togethe
   [...RAPTOR_TOP, '.....CC..CC.........', '....CC....CC........', '...00......00.......'],
   [...RAPTOR_TOP, '......CCCC..........', '......C..C..........', '.....00..00.........'],
 ];
+// Future rides. The hoverbike and starfighter have no legs or wheels: their thruster glow flickers between frames.
+const HOVER = ['...................66.', '..9999999999999999966.', '.A99999999999999999999', '..999999999999999999..'];
+const GLOW = ['....BBBB......BBBB....', '...BBBBBB....BBBBBB...'];
+const BUGGY = ['.5......................', '.5......................', '.5DDDDDDDDDDDDDDDDDDD...',
+  'DDDDDDDDDDDDDDDDDDDDDDD.', 'D7DDDDDDDDDDDDDDDDDDDD44', '.DDDDDDDDDDDDDDDDDDDDD..'];
+const ROVER = ['333333....................', '..5.......................', '..5.......................',
+  '666666666666666666666666..', '6555555555555555555555666.', '66666666666666666666666666'];
+const SHIP = ['.66...............BB......', '.666.............BBB......', '.66666666666666666666.....', '666666666666666666666666..',
+  '.6622222222222222226666666', '..666666666666666666666...', '....55.............55.....'];
+const FLAME = [['..A', '.AJ', '..A'], ['.AA', 'AJJ', '.AA']];
 // Each vehicle: a function turning (rider, frame) into one composed sprite.
 const VEHICLES = {
   horse: (rider, f) => compose(20, 20, [[HORSE[f], 0, 7], [rider, 6, 3]]),
   chariot: (rider, f) => compose(28, 20, [[HORSE[f], 8, 7], [rider, 1, 3], [CART, 0, 10], [WHEEL[f], 2, 13]]),
   boat: (rider, f) => compose(24, 15, [[rider, 8, 0], [[...HULL, WAKE[f]], 0, 8]]),
   raptor: (rider, f) => compose(20, 19, [[RAPTOR[f], 0, 7], [rider, 6, 4]]),
+  hoverbike: (rider, f) => compose(22, 15, [[[...HOVER, GLOW[f]], 0, 10], [rider, 6, 2]]),
+  buggy: (rider, f) => compose(24, 19, [[rider, 7, 2], [BUGGY, 0, 9], [WHEEL[f], 1, 12], [WHEEL[f], 16, 12]]),
+  rover: (rider, f) => compose(26, 19, [[rider, 8, 2], [ROVER, 0, 7], ...[1, 10, 19].map(c => [recolor(WHEEL[f], { 7: '5' }), c, 12])]),
+  starfighter: (rider, f) => compose(29, 15, [[rider, 9, 0], [SHIP, 3, 8], [FLAME[f], 0, 10]]),
 };
 // Riders for every timeline: Vega facing forward ('f') and looking back ('b'), and that timeline's enemy, both ways.
 function makeRiders(eras) {
@@ -349,9 +418,87 @@ bossArt('trex', sym([ // the King Lizard: huge open jaws, slit eyes, tiny arms
   hurt: [[sym(['....00........', '....CC........']), 0, 3]],
 });
 
+// The future timelines' mid-bosses
+bossArt('spidertank', sym([ // the Spider Tank: a turret with one red eye and a cannon, scuttling on six legs
+  '...........A', '...........5', '........5555', '......556666', '.....5666666', '....56666666', '....56666622',
+  '....56666622', '....56A6A6A6', '.....5555555', '...5.5555555', '..5.5..55555', '.5.5...5..55', '5.5....5..55',
+  '5.5....5..55', '5.5....5..BB', '0.0....0....',
+]), {
+  idle: [[sym(['..0.........', '..,.......11', '..,.........']), 0, 14]],
+  hurt: [[sym(['..........55', '..........00']), 0, 6]],
+});
+bossArt('crawler', sym([ // the Scrap Crawler: a junk bulldozer with smokestacks, headlights and a chomping scoop
+  '..55........', '..55........', '..77.....555', '..77...55555', '..DDDDDDDDDD', '.DD777777777', '.D7744777777',
+  '.D7744777777', '.D7777777777', '.DDDDDDDDDDD', '000.55555555', '050.56666666', '000.56666666', '000.55555555',
+  '050.6.6.6.6.', '000.........',
+]), {
+  idle: [[sym(['....,6,6,6,6']), 0, 14]],
+  hurt: [[sym(['....00......', '....00......']), 0, 6]],
+});
+bossArt('wyrm', sym([ // the Dust Wyrm: a giant worm bursting out of the ground, all teeth and throat
+  '.....DDDDDDD', '...DDDDDDDDD', '..DDD2DDDDDD', '.DDDDDD11111', '.DDDD1100000', 'DDDD11000000', 'DDD110002222',
+  'DDD100022222', 'DDD100022222', 'DDD110002222', 'DDDD11000000', '.DDDD1100000', '.DDDDDD11111', '..DDDDDDDDDD',
+  '..EDDDDDDDDD', '...DDDDDDDDD', '..EEEEEEEEEE', '..DDDDDDDDDD',
+]), {
+  idle: [[sym(['........EEEE', '.......EEEEE', '.......EEEEE', '........EEEE']), 0, 6]],
+  hurt: [[sym(['.....E......']), 0, 2], [sym(['........0000', '.......00000', '.......00000', '........0000']), 0, 6]],
+});
+bossArt('cruiser', sym([ // the Battle Cruiser: bridge tower, gun turrets, a glowing hangar
+  '..........55', '.........566', '.........5BB', '.........566', '.......55566', '.....5566666', '...556666666',
+  '.55666666666', '566655566666', '666656566666', '.66655566666', '..666066FFFF', '...66066FBBB', '....6666FBBB',
+  '.....666FFFF', '......66....',
+]), {
+  idle: [[sym(['.........111', '.........111']), 0, 12]],
+  hurt: [[sym(['..........22']), 0, 2], [sym(['....J.......', '...J4J......']), 0, 5]],
+});
+// The future timelines' bosses
+bossArt('omni', sym([ // OMNI, the rogue mainframe: a face on a giant screen, cables hanging loose
+  '.5555555555555', '56666666666666', '56999999999999', '56999999999999', '56999BBBB99999', '5699B9999B9999',
+  '5699B9AA9B9999', '5699B9AA9B9999', '5699B9999B9999', '56999BBBB99999', '56999999999999', '56999999999999',
+  '5699999BBBBBBB', '569999B9B9B9B9', '56999999999999', '56666666666666', '.5555555555555', '.....55..5A5A5',
+  '....5555555555', '...56666666666', '..0..0..0.....', '..0..0..0.....', '.0..0..0......', '.B..B..B......',
+]), {
+  idle: [[sym(['..AAAAAAAAAAAA']), 0, 11], [sym(['......9B9B9B9B']), 0, 13]],
+  hurt: [[sym(['....299992....', '....929929....', '....992299....', '....992299....', '....929929....', '....299992....']), 0, 4],
+    [sym(['.......2222222', '......22222222', '.......2222222']), 0, 12]],
+});
+bossArt('kingscrap', sym([ // King Scrap: a scrap crown and goggles, riding his spiked war truck
+  '..........4.4.', '..........4444', '.........88888', '.........8BB88', '.........88888', '.........88777',
+  '......555DDDDD', '.....5555DDDDD', '.....55..DD4DD', '.........DDDDD', '..555555555555', '..5BBBBBBBBBBB',
+  '..5BBBBB1BBBBB', '..555555555555', '.4DD6666666666', '.DDD6060606060', '.DDD6060606060', '.DDD6666666666',
+  '5DDDDDDDDDDDDD', '55DDDDDDDDDDDD', '00000.5..5..5.', '05550.5..5..5.', '05550.........', '00000.........',
+]), {
+  idle: [[sym(['.....5........', '.....5........', '.....55.......', '..............', '..............', '.....,,.......']), 0, 3]],
+  hurt: [[sym(['..........00..', '..............', '..........000.']), 0, 3], [sym(['......0.0.....']), 0, 11]],
+});
+bossArt('drillwalker', sym([ // the Drill Walker: a cockpit dome on a hazard-striped body, two legs and a huge drill
+  '..........5555', '........556666', '.......5666666', '.......56BBBBB', '.......56B1BBB', '.......56BBBBB',
+  '.......5666666', '..555555555555', '.5404040404040', '.5DDDDDDDDDDDD', '.5DDDDDDDDDDDD', '.5DDDDDDDDDDDD',
+  '..555555555555', '..55.....56666', '.55......56556', '.55......56655', '55........5655', '55........5565',
+  '.55........565', '.55........556', '..55........55', '..55.........5', '.5555.........', '555555........',
+]), {
+  idle: [[sym(['.........56655', '.........56556', '..........5565', '..........5655', '...........556', '...........565']), 0, 14]],
+  hurt: [[sym(['.........22222', '.........21222', '.........22222']), 0, 3]],
+});
+bossArt('zarnax', sym([ // Warlord Zarnax: horned helmet, glowing eyes, armour and cape, an energy staff
+  '.......H......', '.......HH.....', '........HHHHHH', '......HHHHHHHH', '.....HH5555555', '.....H5CCCCCCC',
+  '.....H5C22CCCC', '.....H5CCCCCCC', '......5CCCCCCC', '.......CC01010', '........CCCCCC', '..HHH555555555',
+  '.HHH5666666666', 'HHHH5666666622', 'HHH.5666666222', 'HHH.5666666622', 'HHH.5666666666', 'HHH..555555555',
+  'HHH..444444444', 'HH...666666666', 'H....66666....', 'H....66666....', '.....55555....', '....555555....',
+]), {
+  extras: [[['K', 'B', 'K', ...Array(16).fill('5'), '7'], 27, 2]],
+  idle: [[sym(['........AA....']), 0, 6], [['1'], 27, 3]],
+  hurt: [[sym(['........CC....', '..............', '..............', '.........00000']), 0, 6]],
+});
+
 // Things in the way on vehicle stages
 ART.rock = ['...5555...', '..556655..', '.55566555.', '5555555555', '5555755555', '.55555555.'];
 ART.barrel = ['.DDDDDD.', 'D777777D', 'DDDDDDDD', 'D777777D', 'D777777D', 'DDDDDDDD', 'D777777D', '.DDDDDD.'];
+ART.barrier = ['.A......A.', '2121212121', '1212121212', '2121212121', '.5......5.', '.5......5.', '55......55'];
+ART.tires = ['....0000....', '...005500...', '...050050...', '...005500...', '.0000..0000.', '005500005500', '050050050050',
+  '005500005500', '.0000..0000.'];
+ART.redrock = recolor(ART.rock, { 5: 'D', 6: '2', 7: 'E' });
+ART.asteroid = ['...5555...', '..555F55..', '.55F55555.', '5555555F55', '55F5555555', '.5555F555.', '..55555...'];
 
 // Side-view scenery per timeline: distant hills (with a landmark) and the ground band the vehicles race on.
 // Both are tiles scrolled sideways; drawn in whole columns so they repeat seamlessly.
@@ -459,6 +606,60 @@ function makeSides(scene) {
     g.fillStyle(0x8a6a3e).fillRect(0, 40, 256, 390);
     for (let i = 0; i < 50; i++) g.fillStyle(0x6a4c28).fillRect(rnd.between(0, 250), rnd.between(46, 420), 5, 4);
   });
+  // Chrome City: a skyline of towers with lit windows, a neon highway
+  make('hills-chrome', 512, 220, (g, rnd) => {
+    for (let x = 0; x < 512; x += 64) {
+      const h = rnd.between(90, 200);
+      g.fillStyle(0x1e1e3a).fillRect(x + 4, 220 - h, 56, h);
+      for (let y = 230 - h; y < 210; y += 18) for (let c = 0; c < 3; c++) if (rnd.frac() < 0.5) g.fillStyle(rnd.pick([0xff4fd8, 0x4ff0ff, 0xffd23b])).fillRect(x + 12 + c * 16, y, 8, 8);
+    }
+  });
+  make('ground-chrome', 256, 470, g => {
+    g.fillStyle(0x12122a).fillRect(0, 0, 256, 470);
+    g.fillStyle(0x1a1a24).fillRect(0, 40, 256, 390);
+    g.fillStyle(0xff4fd8).fillRect(0, 40, 256, 4).fillRect(0, 426, 256, 4);
+    for (let x = 0; x < 256; x += 64) g.fillStyle(0x4ff0ff).fillRect(x, 150, 36, 4).fillRect(x, 300, 36, 4);
+  });
+  // The Wasteland: dunes and a rusted wreck, a cracked old highway
+  make('hills-waste', 512, 220, g => {
+    hills(g, 0xc8864a, 4);
+    g.fillStyle(0x6a4a3a).fillRect(300, 150, 120, 40).fillRect(330, 120, 50, 30);
+    g.fillStyle(0x3a2a22).fillCircle(320, 192, 16).fillCircle(400, 192, 16);
+  });
+  make('ground-waste', 256, 470, (g, rnd) => {
+    g.fillStyle(0xd8a860).fillRect(0, 0, 256, 470);
+    g.fillStyle(0x4a4440).fillRect(0, 40, 256, 390);
+    for (let x = 0; x < 256; x += 64) g.fillStyle(0xb8a878).fillRect(x, 230, 30, 6);
+    for (let i = 0; i < 14; i++) {
+      const x = rnd.between(0, 200), y = rnd.between(50, 400);
+      g.fillStyle(0x2a2622).fillRect(x, y, rnd.between(20, 50), 2).fillRect(x + 10, y, 2, rnd.between(8, 18));
+    }
+    for (let i = 0; i < 40; i++) g.fillStyle(0xe8bc78).fillRect(rnd.between(0, 250), rnd.between(0, 465), 5, 3);
+  });
+  // Mars Colony: red mountains and glass domes, a rutted dirt track
+  make('hills-mars', 512, 220, g => {
+    for (const [x, w, h] of [[0, 260, 150], [200, 200, 100], [330, 182, 170]]) g.fillStyle(0x8a3a22).fillTriangle(x, 220, x + w / 2, 220 - h, x + w, 220);
+    for (const [x, r] of [[120, 50], [420, 36]]) g.fillStyle(0x7d7d8c).fillCircle(x, 220, r + 4).fillStyle(0x9fd8e8).fillCircle(x, 220, r);
+    g.fillStyle(0xf4e8d0).fillCircle(470, 40, 12);
+  });
+  make('ground-mars', 256, 470, (g, rnd) => {
+    g.fillStyle(0xa8482a).fillRect(0, 0, 256, 470);
+    g.fillStyle(0x8a3a22).fillRect(0, 40, 256, 390);
+    g.fillStyle(0x6e2c18).fillRect(0, 150, 256, 14).fillRect(0, 300, 256, 14);
+    for (let i = 0; i < 50; i++) g.fillStyle(rnd.pick([0x6e2c18, 0xc05a34])).fillRect(rnd.between(0, 250), rnd.between(0, 465), 5, 4);
+  });
+  // The Star Empire: stars, a ringed planet and a space station; open space with guide beams
+  make('hills-star', 512, 220, (g, rnd) => {
+    for (let i = 0; i < 60; i++) g.fillStyle(0xffffff, rnd.pick([0.4, 0.7, 1])).fillRect(rnd.between(0, 510), rnd.between(0, 218), 2, 2);
+    g.fillStyle(0x8a5ac8).fillCircle(140, 110, 50);
+    g.lineStyle(4, 0xc8a8ff).strokeEllipse(140, 110, 160, 30);
+    g.fillStyle(0x7d7d8c).fillRect(360, 150, 100, 14).fillRect(402, 120, 16, 70);
+  });
+  make('ground-star', 256, 470, (g, rnd) => {
+    g.fillStyle(0x05051a).fillRect(0, 0, 256, 470);
+    for (let i = 0; i < 70; i++) g.fillStyle(rnd.pick([0xffffff, 0x9fd8e8, 0x7d7d8c])).fillRect(rnd.between(0, 240), rnd.between(0, 466), rnd.between(2, 14), 2);
+    g.fillStyle(0x4ff0ff).fillRect(0, 40, 256, 2).fillRect(0, 428, 256, 2);
+  });
 }
 
 // ---------- Roads: one top-down tile per timeline, scrolled under Vega. ----------
@@ -549,5 +750,46 @@ function makeRoads(scene) {
     g.fillStyle(0x8a6a3e).fillRect(L, 0, R - L, TILE);
     for (let y = 0; y < TILE; y += 16) g.fillRect(L - rnd.between(0, 10), y, 10, 16).fillRect(R + rnd.between(0, 10) - 10, y, 10, 16);
     for (let i = 0; i < 40; i++) g.fillStyle(0x6a4c28).fillRect(rnd.between(L + 6, R - 10), rnd.between(0, TILE - 4), 5, 4);
+  });
+  make('road-chrome', (g, rnd) => { // a neon highway between dark towers with lit windows
+    g.fillStyle(0x12122a).fillRect(0, 0, W, TILE);
+    for (const x0 of [0, R + 16]) for (let y = 0; y < TILE; y += 64) {
+      g.fillStyle(0x1e1e3a).fillRect(x0 + 6, y + 4, L - 28, 56);
+      for (let i = 0; i < 6; i++) g.fillStyle(rnd.pick([0xff4fd8, 0x4ff0ff, 0xffd23b, 0x2a2a4a])).fillRect(x0 + 14 + (i % 3) * 26, y + 12 + Math.floor(i / 3) * 24, 12, 10);
+    }
+    g.fillStyle(0x1a1a24).fillRect(L - 4, 0, R - L + 8, TILE);
+    g.fillStyle(0xff4fd8).fillRect(L, 0, 4, TILE).fillRect(R - 4, 0, 4, TILE); // neon edge lines
+    for (let y = 0; y < TILE; y += 64) g.fillStyle(0x4ff0ff).fillRect(L + 116, y, 4, 36).fillRect(R - 120, y, 4, 36); // lane dashes
+  });
+  make('road-waste', (g, rnd) => { // a cracked old highway half buried in sand, rubble at the sides
+    g.fillStyle(0xd8a860).fillRect(0, 0, W, TILE);
+    for (let i = 0; i < 60; i++) g.fillStyle(rnd.pick([0xc8964e, 0xe8bc78])).fillRect(rnd.between(0, W - 6), rnd.between(0, TILE - 4), 6, 3);
+    for (let i = 0; i < 8; i++) g.fillStyle(0x6a5a48).fillRect(rnd.pick([rnd.between(10, L - 30), rnd.between(R + 10, W - 30)]), rnd.between(0, TILE - 16), 16, 12);
+    g.fillStyle(0x4a4440).fillRect(L, 0, R - L, TILE);
+    for (let y = 0; y < TILE; y += 16) g.fillStyle(0xd8a860).fillRect(L, y, rnd.between(0, 22), 16).fillRect(R - rnd.between(0, 22), y, 22, 16); // sand drifting in
+    for (let y = 0; y < TILE; y += 64) g.fillStyle(0xb8a878).fillRect(W / 2 - 3, y, 6, 30); // faded center line
+    for (let i = 0; i < 14; i++) { // cracks
+      const x = rnd.between(L + 20, R - 70), y = rnd.between(0, TILE - 20);
+      g.fillStyle(0x2a2622).fillRect(x, y, rnd.between(20, 50), 2).fillRect(x + 10, y, 2, rnd.between(8, 18));
+    }
+  });
+  make('road-mars', (g, rnd) => { // a red dirt track between glass colony domes, with rover ruts
+    g.fillStyle(0xa8482a).fillRect(0, 0, W, TILE);
+    for (let i = 0; i < 70; i++) g.fillStyle(rnd.pick([0x8a3a22, 0xc05a34])).fillRect(rnd.between(0, W - 6), rnd.between(0, TILE - 4), 6, 4);
+    for (const [x, y] of [[60, 70], [540, 190]]) {
+      g.fillStyle(0x7d7d8c).fillCircle(x, y, 46);
+      g.fillStyle(0x9fd8e8).fillCircle(x, y, 40);
+      g.fillStyle(0xd8f4ff).fillCircle(x - 14, y - 14, 10);
+    }
+    g.fillStyle(0x8a3a22).fillRect(L, 0, R - L, TILE);
+    g.fillStyle(0x6e2c18).fillRect(L + 80, 0, 18, TILE).fillRect(R - 98, 0, 18, TILE);
+    for (let y = 0; y < TILE; y += 12) g.fillStyle(0x5a2414).fillRect(L + 80, y, 18, 3).fillRect(R - 98, y, 18, 3);
+  });
+  make('road-star', (g, rnd) => { // a starship deck wall to wall (nowhere to fall off): plates, guide lights, vents
+    g.fillStyle(0x2a2e3e).fillRect(0, 0, W, TILE);
+    for (let y = 0; y < TILE; y += 64) for (let x = 0; x < W; x += 75) g.fillStyle(rnd.pick([0x4a5068, 0x444a60, 0x50566e])).fillRect(x + 2, y + 2, 71, 60);
+    g.fillStyle(0x1a1c28).fillRect(0, 0, 14, TILE).fillRect(W - 14, 0, 14, TILE);
+    for (let y = 0; y < TILE; y += 32) g.fillStyle(0x4ff0ff).fillRect(18, y + 12, 6, 6).fillRect(W - 24, y + 12, 6, 6);
+    for (let y = 32; y < TILE; y += 128) g.fillStyle(0x16181f).fillRect(W / 2 - 40, y, 80, 20).fillStyle(0xff4fd8).fillRect(W / 2 - 36, y + 8, 72, 4);
   });
 }

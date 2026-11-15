@@ -75,7 +75,7 @@ function installHarness() {
 
 const visible = (page, id) => page.evaluate(i => !document.getElementById(i).hidden && !document.getElementById('ui').hidden, id);
 
-// Every checkpoint of a 50-wave run, from the run's own route (the seed picks 5 timelines out of 7) and bonus plan:
+// Every checkpoint of a 50-wave run, from the run's own route (the seed picks 5 timelines out of 11) and bonus plan:
 // each level's boss, what follows it (the mid-boss: the seed's bonus chase or escape, or straight to the shop; the
 // timeline boss: always straight to the shop), and the time jumps.
 const checkpointsFor = (route, plan) => route.flatMap((era, i) => [
@@ -414,6 +414,91 @@ async function run(browser, name, options) {
     }
     await shot('4c-new-gear');
 
+    // ----- The future timelines' gear -----
+    const future = await page.evaluate(() => {
+      const s = scene(), made = [], blasts = [], spawn = s.spawnBullet, explode = s.explode;
+      s.coins = 99999;
+      for (const id of ['smart', 'drone', 'molotov', 'drill', 'torpedo', 'scavenger', 'deflector', 'cannon', 'fire']) s.buy(UPGRADE[id]);
+      s.spawnBullet = function (x, y, tex, angle, o) {
+        made.push({ tex, home: o.home ?? 0, drone: s.drones.some(d => d.x === x && d.y === y) });
+        return spawn.apply(this, arguments);
+      };
+      s.explode = function (x, y, r, dmg, cannon, burns) { blasts.push({ r, burns: !!burns }); return explode.apply(this, arguments); };
+      // Smart Rounds: a shot fired straight up curves towards an enemy off to the right (the only one in play for now).
+      const others = s.enemies.getChildren().slice();
+      others.forEach(o => o.setActive(false));
+      const e = s.spawnEnemy(520, 300, 'H', { mode: 'formation', homeX: 520, homeY: 300, fromX: 520, fromY: 300, enter: 1 });
+      const b = spawn.call(s, 80, 800, 'laser', -Math.PI / 2, { dmg: 0, pierce: 0, bounce: 0, home: s.P.homing });
+      for (let i = 0; i < 20; i++) { s.invulnUntil = Infinity; s.nextFire = s.nextDrone = s.nextMolotov = s.nextDrill = s.nextTorpedo = s.t + 1000; __step(1); }
+      const curved = b.active && b.body.velocity.x > 50;
+      b.destroy();
+      e.destroy();
+      others.forEach(o => o.scene && o.setActive(true)); // (skip any that left the screen meanwhile)
+      for (let i = 0; i < 600; i++) {
+        if (app.state === 'shop') document.querySelector('#shop [data-action=continue]').click();
+        s.invulnUntil = Infinity;
+        __step(1);
+      }
+      s.spawnBullet = spawn;
+      s.explode = explode;
+      const has = t => made.some(m => m.tex === t);
+      return {
+        curved, drones: s.drones.length, droneShot: made.some(m => m.drone), molotov: has('molotov'), fireBlast: blasts.some(x => x.burns), drill: has('drillbolt'),
+        torpedo: made.some(m => m.tex === 'torpedo' && m.home > 0), coinChance: s.P.coinChance, shield: s.shield >= 1,
+        combos: ['firebomb', 'torpedobay', 'droneswarm'].filter(id => s.combos.some(c => c.id === id)).join(','),
+      };
+    });
+    check(`${name}: future gear works (homing shots, drones, Molotov flames, drill bolts, homing torpedoes, Scavenger, Deflector)`,
+      future.curved && future.drones === 2 && future.droneShot && future.molotov && future.fireBlast && future.drill && future.torpedo && future.coinChance === 2 && future.shield,
+      JSON.stringify(future));
+    check(`${name}: future combos unlock (Firebomb, Torpedo Bay, Drone Swarm)`, future.combos === 'firebomb,torpedobay,droneswarm', future.combos);
+    await shot('4d-future-gear');
+    const o2 = await page.evaluate(() => { // O2 Tank: the next wave cleared heals 1
+      const s = scene(), wc = s.waveCleared;
+      let healed = null;
+      s.buy(UPGRADE.o2tank);
+      s.waveCleared = function () { const before = this.hp; wc.call(this); healed = { before, after: this.hp }; };
+      s.hp = 1;
+      for (let i = 0; i < 6000 && !healed; i++) {
+        if (app.state === 'shop') document.querySelector('#shop [data-action=continue]').click();
+        s.invulnUntil = Infinity;
+        __step(1);
+      }
+      s.waveCleared = wc;
+      return healed;
+    });
+    check(`${name}: O2 Tank heals 1 after a wave`, o2 && o2.after === o2.before + 1, JSON.stringify(o2));
+    for (const id of ['emp', 'nitro', 'orbital', 'blackhole']) {
+      const r = await page.evaluate(i => {
+        const s = scene(), hold = () => {
+          s.invulnUntil = Infinity;
+          for (const k of ['nextFire', 'nextCannon', 'nextAxe', 'nextBoomerang', 'nextDrone', 'nextMolotov', 'nextDrill', 'nextTorpedo']) s[k] = s.t + 1000;
+        };
+        const onScreen = () => s.enemies.getChildren().filter(e => s.isOnScreen(e));
+        for (let k = 0; k < 2000 && !(app.state === 'playing' && onScreen().length >= 2); k++) {
+          if (app.state === 'shop') document.querySelector('#shop [data-action=continue]').click();
+          if (s.boss?.ready) s.damage(s.boss, 1e6, true); // boss waves have no regular enemies
+          hold();
+          __step(1);
+        }
+        const foes = onScreen();
+        s.buy(UPGRADE[i]);
+        s.charge = s.chargeNeeded();
+        const r = { ok: s.useActive(), item: s.P.active?.id, foes: foes.length };
+        const hurt = () => foes.some(e => !e.active || e.hp < e.maxHp);
+        if (i === 'emp') Object.assign(r, { frozen: s.frozenUntil > s.t, shots: s.enemyShots.countActive(), hurt: hurt() });
+        if (i === 'nitro') Object.assign(r, { fast: s.fireDelay() < s.P.fireDelay / 2.5, speed: s.moveSpeed() === 2 * s.P.moveSpeed });
+        if (i === 'blackhole') r.pulled = foes.filter(e => e.mode === 'pulled').length;
+        for (let k = 0; k < 30; k++) { hold(); __step(1); }
+        if (i === 'orbital') r.hurt = hurt();
+        for (let k = 0; k < 120; k++) { hold(); __step(1); }
+        if (i === 'blackhole') r.stuck = s.enemies.getChildren().filter(e => e.mode === 'pulled').length;
+        return r;
+      }, id);
+      const effect = { emp: r.frozen && r.shots === 0 && r.hurt, nitro: r.fast && r.speed, orbital: r.hurt, blackhole: r.pulled >= 2 && r.stuck === 0 }[id];
+      check(`${name}: ${id} active item fires and works`, r.ok && r.item === id && r.foes >= 2 && effect, JSON.stringify(r));
+    }
+
     // Same seed: same first shop and same 5 timelines. (offers1/route1 came from seed1 before buying anything.)
     const again = await firstShop(page, seed1);
     const other = await firstShop(page, 'OTHER9');
@@ -495,9 +580,57 @@ async function run(browser, name, options) {
       });
     }
 
-    // A full route whose bonus plan has a bonus after the first mini-boss, both a chase and an escape, and a
-    // mini-boss with no bonus level.
-    const routeSeed = await page.evaluate(() => findSeed('ROUTE', TIMELINES, p => p[0] && p.includes('chase') && p.includes('escape') && p.includes(null)));
+    // ----- Every timeline: its road and army, then its bonus-level ride, riders and obstacles (chase and escape in turn) -----
+    const eraIds = await page.evaluate(() => ERAS.map(e => e.id));
+    for (const [i, id] of eraIds.entries()) {
+      const top = await page.evaluate(id => {
+        const s = scene(), E = s.E = ERA[id];
+        s.road.setTexture(E.road);
+        s.cameras.main.setBackgroundColor(E.bg);
+        s.formation(['SSSSS', 'GGGGG', 'CHCHC']);
+        for (let f = 0; f < 80; f++) { s.invulnUntil = Infinity; s.nextFire = s.t + 1e6; __step(1); }
+        return { road: roadKey() === E.road, army: [...new Set(s.enemies.getChildren().map(e => e.texture.key))].sort().join(',') === Object.values(E.army).sort().join(',') };
+      }, id);
+      check(`${name}: ${id}: its road and all 4 soldier types`, top.road && top.army, JSON.stringify(top));
+      await shot(`11-${id}-road`);
+      const mode = i % 2 ? 'escape' : 'chase';
+      const side = await page.evaluate(([id, mode]) => {
+        const s = scene(), E = ERA[id], tex = o => (o.displayTexture ?? o.texture).key;
+        s.enemies.clear(true, true);
+        s.clearShots();
+        s.bonus = { mode, caught: 0, endsAt: s.t + 1e6 };
+        s.setView('side', mode);
+        Object.assign(s, { nextRider: s.t, nextDive: s.t + 1e6, nextObstacle: s.t });
+        for (let f = 0; f < 90; f++) { s.invulnUntil = Infinity; s.nextFire = s.t + 1e6; __step(1); }
+        return {
+          anim: s.player.anims.currentAnim?.key, rider: s.enemies.getChildren()[0]?.anims.currentAnim?.key,
+          obstacle: s.obstacles.getChildren()[0]?.texture.key, scenery: tex(s.hills) === `hills-${id}` && tex(s.ground) === `ground-${id}`,
+        };
+      }, [id, mode]);
+      const want = { anim: `ride-${id}-${mode === 'chase' ? 'f' : 'b'}`, rider: `rideE-${id}-${mode === 'chase' ? 'b' : 'f'}`, obstacle: await page.evaluate(id => ERA[id].obstacle, id), scenery: true };
+      check(`${name}: ${id}: bonus ${mode} on its ${await page.evaluate(id => ERA[id].vehicle, id)}, with riders, obstacles and scenery`, JSON.stringify(side) === JSON.stringify(want), JSON.stringify(side));
+      await shot(`11-${id}-bonus`);
+      await page.evaluate(() => {
+        const s = scene();
+        s.bonus = null;
+        s.enemies.clear(true, true);
+        s.obstacles.clear(true, true);
+        s.clearShots();
+        s.setView('top');
+      });
+    }
+
+    // A full route with at least two future timelines (one with a bonus level), whose bonus plan has a bonus after the
+    // first mini-boss, both a chase and an escape, and a mini-boss with no bonus level.
+    const routeSeed = await page.evaluate(() => {
+      const future = ['chrome', 'waste', 'mars', 'star'];
+      for (let i = 1; ; i++) {
+        const sd = `ROUTE${i}`, p = bonusPlan(sd, TIMELINES);
+        const route = new Phaser.Math.RandomDataGenerator([`${sd}/route`]).shuffle(ERAS.slice()).slice(0, TIMELINES);
+        if (p[0] && p.includes('chase') && p.includes('escape') && p.includes(null)
+          && route.filter(e => future.includes(e.id)).length >= 2 && route.some((e, k) => future.includes(e.id) && p[k])) return sd;
+      }
+    });
     const plan = await page.evaluate(sd => bonusPlan(sd, TIMELINES), routeSeed);
     console.log(`     route seed ${routeSeed}, bonus levels: ${plan.map(m => m ?? '-').join(' ')}`);
     await startRun(page, routeSeed); // a fresh run from wave 1
@@ -629,9 +762,10 @@ async function run(browser, name, options) {
     await shot('10-armies');
   }
 
-  if (name === 'phone') { // sprite sheets: every texture at 2x, for checking the pixel art (two pages, it's a lot)
+  if (name === 'phone') { // sprite sheets: every texture at 2x, for checking the pixel art
     const keys = await page.evaluate(() => Object.keys(ART).sort((a, b) => b.startsWith('vega') - a.startsWith('vega')).filter(k => !/^ride.*1$/.test(k)));
-    for (const [i, part] of [keys.slice(0, Math.ceil(keys.length / 2)), keys.slice(Math.ceil(keys.length / 2))].entries()) {
+    const per = Math.ceil(keys.length / 3); // three pages, it's a lot
+    for (const [i, part] of [0, 1, 2].map(k => keys.slice(k * per, (k + 1) * per)).entries()) {
       await page.evaluate(list => {
         document.getElementById('sheet')?.remove();
         const sheet = document.createElement('div');

@@ -15,6 +15,10 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 | `axe.png` | 15 x 15 | Throwing axe (spins). Also Scandinavia's enemy shot. |
 | `boomerang.png` | 28 x 16 | Bone Boomerang (spins). |
 | `bull.png` | 40 x 36 | Stampede cattle, seen from above, facing up. |
+| `drone.png` | 28 x 28 | Drone Buddy, seen from above. |
+| `drillbolt.png` | 15 x 21 | Plasma Drill bolt (points up). |
+| `torpedo.png` | 15 x 21 | Photon Torpedo (points up). |
+| `molotov.png` | 15 x 24 | Molotov bottle (spins). |
 
 ## Pickups and effects
 
@@ -223,6 +227,118 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 | `rideE-stone-f1.png` | 80 x 76 | Enemy rider on the raptor, facing right (chasing you). Frame 2 of 2. |
 | `rideE-stone-b0.png` | 80 x 76 | Enemy rider on the raptor, turned back to shoot at you (being chased). Frame 1 of 2. |
 | `rideE-stone-b1.png` | 80 x 76 | Enemy rider on the raptor, turned back to shoot at you (being chased). Frame 2 of 2. |
+
+## Chrome City
+
+| File | Size | What it is |
+|---|---|---|
+| `patroldroid.png` | 48 x 48 | Grunt (foot soldier), front view, 12 x 12 pixels drawn at 4x. |
+| `sniperdrone.png` | 48 x 48 | Sharpshooter (aims at Vega), front view. |
+| `streetpunk.png` | 48 x 48 | Charger (runs at Vega, never shoots), front view. |
+| `riotmech.png` | 56 x 56 | Heavy (takes 4x the hits), front view, 14 x 14 pixels drawn at 4x. |
+| `plasma.png` | 9 x 15 | Their shot (points down). |
+| `spidertank0.png` | 144 x 102 | Mid-boss (wave 5): THE SPIDER TANK. Idle animation, frame 1 of 2. |
+| `spidertank1.png` | 144 x 102 | Mid-boss (wave 5): THE SPIDER TANK. Idle animation, frame 2 of 2. |
+| `spidertankHurt.png` | 144 x 102 | Mid-boss (wave 5): THE SPIDER TANK. Hurt pose (shown when hit). All three frames must be the same size. |
+| `omni0.png` | 168 x 144 | Boss (wave 10): OMNI ROGUE MAINFRAME. Idle animation, frame 1 of 2. |
+| `omni1.png` | 168 x 144 | Boss (wave 10): OMNI ROGUE MAINFRAME. Idle animation, frame 2 of 2. |
+| `omniHurt.png` | 168 x 144 | Boss (wave 10): OMNI ROGUE MAINFRAME. Hurt pose (shown when hit). All three frames must be the same size. |
+| `road-chrome.png` | 600 x 256 | Road tile, seen from above. Repeats top to bottom: the top and bottom edges must join. |
+| `hills-chrome.png` | 512 x 220 | Vehicle stages: distant scenery with a see-through sky. Repeats sideways: left and right edges must join. |
+| `ground-chrome.png` | 256 x 470 | Vehicle stages: the ground the vehicles race on. Repeats sideways: left and right edges must join. |
+| `barrier.png` | 40 x 28 | Vehicle stages: obstacle. |
+| `ride-chrome-f0.png` | 88 x 60 | Vega on the hoverbike, facing right and shooting ahead. Animation frame 1 of 2. |
+| `ride-chrome-f1.png` | 88 x 60 | Vega on the hoverbike, facing right and shooting ahead. Animation frame 2 of 2. |
+| `ride-chrome-b0.png` | 88 x 60 | Vega on the hoverbike, facing right but turned to shoot backwards. Frame 1 of 2. |
+| `ride-chrome-b1.png` | 88 x 60 | Vega on the hoverbike, facing right but turned to shoot backwards. Frame 2 of 2. |
+| `rideE-chrome-f0.png` | 88 x 60 | Enemy rider on the hoverbike, facing right (chasing you). Frame 1 of 2. |
+| `rideE-chrome-f1.png` | 88 x 60 | Enemy rider on the hoverbike, facing right (chasing you). Frame 2 of 2. |
+| `rideE-chrome-b0.png` | 88 x 60 | Enemy rider on the hoverbike, turned back to shoot at you (being chased). Frame 1 of 2. |
+| `rideE-chrome-b1.png` | 88 x 60 | Enemy rider on the hoverbike, turned back to shoot at you (being chased). Frame 2 of 2. |
+
+## The Wasteland
+
+| File | Size | What it is |
+|---|---|---|
+| `roadraider.png` | 48 x 48 | Grunt (foot soldier), front view, 12 x 12 pixels drawn at 4x. |
+| `scavrifle.png` | 48 x 48 | Sharpshooter (aims at Vega), front view. |
+| `mutanthound.png` | 48 x 48 | Charger (runs at Vega, never shoots), front view. |
+| `juggernaut.png` | 56 x 56 | Heavy (takes 4x the hits), front view, 14 x 14 pixels drawn at 4x. |
+| `scrap.png` | 15 x 15 | Their shot (points down). |
+| `crawler0.png` | 144 x 96 | Mid-boss (wave 5): THE SCRAP CRAWLER. Idle animation, frame 1 of 2. |
+| `crawler1.png` | 144 x 96 | Mid-boss (wave 5): THE SCRAP CRAWLER. Idle animation, frame 2 of 2. |
+| `crawlerHurt.png` | 144 x 96 | Mid-boss (wave 5): THE SCRAP CRAWLER. Hurt pose (shown when hit). All three frames must be the same size. |
+| `kingscrap0.png` | 168 x 144 | Boss (wave 10): KING SCRAP. Idle animation, frame 1 of 2. |
+| `kingscrap1.png` | 168 x 144 | Boss (wave 10): KING SCRAP. Idle animation, frame 2 of 2. |
+| `kingscrapHurt.png` | 168 x 144 | Boss (wave 10): KING SCRAP. Hurt pose (shown when hit). All three frames must be the same size. |
+| `road-waste.png` | 600 x 256 | Road tile, seen from above. Repeats top to bottom: the top and bottom edges must join. |
+| `hills-waste.png` | 512 x 220 | Vehicle stages: distant scenery with a see-through sky. Repeats sideways: left and right edges must join. |
+| `ground-waste.png` | 256 x 470 | Vehicle stages: the ground the vehicles race on. Repeats sideways: left and right edges must join. |
+| `tires.png` | 48 x 36 | Vehicle stages: obstacle. |
+| `ride-waste-f0.png` | 96 x 76 | Vega on the buggy, facing right and shooting ahead. Animation frame 1 of 2. |
+| `ride-waste-f1.png` | 96 x 76 | Vega on the buggy, facing right and shooting ahead. Animation frame 2 of 2. |
+| `ride-waste-b0.png` | 96 x 76 | Vega on the buggy, facing right but turned to shoot backwards. Frame 1 of 2. |
+| `ride-waste-b1.png` | 96 x 76 | Vega on the buggy, facing right but turned to shoot backwards. Frame 2 of 2. |
+| `rideE-waste-f0.png` | 96 x 76 | Enemy rider on the buggy, facing right (chasing you). Frame 1 of 2. |
+| `rideE-waste-f1.png` | 96 x 76 | Enemy rider on the buggy, facing right (chasing you). Frame 2 of 2. |
+| `rideE-waste-b0.png` | 96 x 76 | Enemy rider on the buggy, turned back to shoot at you (being chased). Frame 1 of 2. |
+| `rideE-waste-b1.png` | 96 x 76 | Enemy rider on the buggy, turned back to shoot at you (being chased). Frame 2 of 2. |
+
+## Mars Colony
+
+| File | Size | What it is |
+|---|---|---|
+| `minerbot.png` | 48 x 48 | Grunt (foot soldier), front view, 12 x 12 pixels drawn at 4x. |
+| `surveyor.png` | 48 x 48 | Sharpshooter (aims at Vega), front view. |
+| `rockcrawler.png` | 48 x 48 | Charger (runs at Vega, never shoots), front view. |
+| `haulermech.png` | 56 x 56 | Heavy (takes 4x the hits), front view, 14 x 14 pixels drawn at 4x. |
+| `redbeam.png` | 9 x 18 | Their shot (points down). |
+| `wyrm0.png` | 144 x 108 | Mid-boss (wave 5): THE DUST WYRM. Idle animation, frame 1 of 2. |
+| `wyrm1.png` | 144 x 108 | Mid-boss (wave 5): THE DUST WYRM. Idle animation, frame 2 of 2. |
+| `wyrmHurt.png` | 144 x 108 | Mid-boss (wave 5): THE DUST WYRM. Hurt pose (shown when hit). All three frames must be the same size. |
+| `drillwalker0.png` | 168 x 144 | Boss (wave 10): THE DRILL WALKER. Idle animation, frame 1 of 2. |
+| `drillwalker1.png` | 168 x 144 | Boss (wave 10): THE DRILL WALKER. Idle animation, frame 2 of 2. |
+| `drillwalkerHurt.png` | 168 x 144 | Boss (wave 10): THE DRILL WALKER. Hurt pose (shown when hit). All three frames must be the same size. |
+| `road-mars.png` | 600 x 256 | Road tile, seen from above. Repeats top to bottom: the top and bottom edges must join. |
+| `hills-mars.png` | 512 x 220 | Vehicle stages: distant scenery with a see-through sky. Repeats sideways: left and right edges must join. |
+| `ground-mars.png` | 256 x 470 | Vehicle stages: the ground the vehicles race on. Repeats sideways: left and right edges must join. |
+| `redrock.png` | 40 x 24 | Vehicle stages: obstacle. |
+| `ride-mars-f0.png` | 104 x 76 | Vega on the rover, facing right and shooting ahead. Animation frame 1 of 2. |
+| `ride-mars-f1.png` | 104 x 76 | Vega on the rover, facing right and shooting ahead. Animation frame 2 of 2. |
+| `ride-mars-b0.png` | 104 x 76 | Vega on the rover, facing right but turned to shoot backwards. Frame 1 of 2. |
+| `ride-mars-b1.png` | 104 x 76 | Vega on the rover, facing right but turned to shoot backwards. Frame 2 of 2. |
+| `rideE-mars-f0.png` | 104 x 76 | Enemy rider on the rover, facing right (chasing you). Frame 1 of 2. |
+| `rideE-mars-f1.png` | 104 x 76 | Enemy rider on the rover, facing right (chasing you). Frame 2 of 2. |
+| `rideE-mars-b0.png` | 104 x 76 | Enemy rider on the rover, turned back to shoot at you (being chased). Frame 1 of 2. |
+| `rideE-mars-b1.png` | 104 x 76 | Enemy rider on the rover, turned back to shoot at you (being chased). Frame 2 of 2. |
+
+## The Star Empire
+
+| File | Size | What it is |
+|---|---|---|
+| `trooper.png` | 48 x 48 | Grunt (foot soldier), front view, 12 x 12 pixels drawn at 4x. |
+| `marksman.png` | 48 x 48 | Sharpshooter (aims at Vega), front view. |
+| `jettrooper.png` | 48 x 48 | Charger (runs at Vega, never shoots), front view. |
+| `battledroid.png` | 56 x 56 | Heavy (takes 4x the hits), front view, 14 x 14 pixels drawn at 4x. |
+| `bolt.png` | 9 x 18 | Their shot (points down). |
+| `cruiser0.png` | 144 x 96 | Mid-boss (wave 5): THE BATTLE CRUISER. Idle animation, frame 1 of 2. |
+| `cruiser1.png` | 144 x 96 | Mid-boss (wave 5): THE BATTLE CRUISER. Idle animation, frame 2 of 2. |
+| `cruiserHurt.png` | 144 x 96 | Mid-boss (wave 5): THE BATTLE CRUISER. Hurt pose (shown when hit). All three frames must be the same size. |
+| `zarnax0.png` | 168 x 144 | Boss (wave 10): WARLORD ZARNAX. Idle animation, frame 1 of 2. |
+| `zarnax1.png` | 168 x 144 | Boss (wave 10): WARLORD ZARNAX. Idle animation, frame 2 of 2. |
+| `zarnaxHurt.png` | 168 x 144 | Boss (wave 10): WARLORD ZARNAX. Hurt pose (shown when hit). All three frames must be the same size. |
+| `road-star.png` | 600 x 256 | Road tile, seen from above. Repeats top to bottom: the top and bottom edges must join. |
+| `hills-star.png` | 512 x 220 | Vehicle stages: distant scenery with a see-through sky. Repeats sideways: left and right edges must join. |
+| `ground-star.png` | 256 x 470 | Vehicle stages: the ground the vehicles race on. Repeats sideways: left and right edges must join. |
+| `asteroid.png` | 40 x 28 | Vehicle stages: obstacle. |
+| `ride-star-f0.png` | 116 x 60 | Vega on the starfighter, facing right and shooting ahead. Animation frame 1 of 2. |
+| `ride-star-f1.png` | 116 x 60 | Vega on the starfighter, facing right and shooting ahead. Animation frame 2 of 2. |
+| `ride-star-b0.png` | 116 x 60 | Vega on the starfighter, facing right but turned to shoot backwards. Frame 1 of 2. |
+| `ride-star-b1.png` | 116 x 60 | Vega on the starfighter, facing right but turned to shoot backwards. Frame 2 of 2. |
+| `rideE-star-f0.png` | 116 x 60 | Enemy rider on the starfighter, facing right (chasing you). Frame 1 of 2. |
+| `rideE-star-f1.png` | 116 x 60 | Enemy rider on the starfighter, facing right (chasing you). Frame 2 of 2. |
+| `rideE-star-b0.png` | 116 x 60 | Enemy rider on the starfighter, turned back to shoot at you (being chased). Frame 1 of 2. |
+| `rideE-star-b1.png` | 116 x 60 | Enemy rider on the starfighter, turned back to shoot at you (being chased). Frame 2 of 2. |
 
 ## Everything else
 

@@ -24,10 +24,15 @@ function installHarness() {
   // A tileSprite renders through its own generated texture; the road it shows is its displayTexture.
   window.roadKey = () => (scene().road.displayTexture ?? scene().road.texture).key;
   window.__shopBot = () => {
-    let card;
-    while ((card = document.querySelector('#shopItems .card:not(:disabled)'))) card.click();
+    for (let k = 0; k < 40; k++) {
+      const el = document.querySelector('#shopItems [data-replace]:not(:disabled)') ?? document.querySelector('#shopItems .card:not(:disabled)');
+      if (!el) break;
+      el.click();
+    }
     document.querySelector('#shop [data-action=continue]').click();
   };
+  // Empty one loadout slot (as if its items were sold), so a check can buy into it.
+  window.__clearSlot = (s, slot) => { for (const id of s.loadout[slot]) if (id) delete s.owned[id]; s.loadout[slot].fill(null); s.refreshStats(); };
   // Which mini-boss levels of a seed lead into a bonus level (mirrors Play.rollBonus: one roll per timeline).
   window.bonusPlan = (seed, n) => {
     const r = new Phaser.Math.RandomDataGenerator([`${seed}/bonus`]);
@@ -371,28 +376,39 @@ async function run(browser, name, options) {
 
     // ----- The later timelines' gear -----
     const gear = await page.evaluate(() => {
-      const s = scene();
+      const s = scene(), seen = { stars: 0, axe: false, boomerangBack: false, burning: false };
       s.coins = 9999;
-      for (const id of ['sixshooter', 'dynamite', 'shuriken', 'axes', 'boomerang', 'fire', 'berserk', 'hearth']) s.buy(UPGRADE[id]);
-      const seen = { stars: 0, axe: false, boomerangBack: false, burning: false };
+      for (const slot of ['barrel', 'ammo', 'trigger', 'under', 'charm']) __clearSlot(s, slot);
+      for (const id of ['sixshooter', 'fire', 'berserk', 'shuriken', 'hearth', 'axes']) s.buy(UPGRADE[id]);
       // Weak early enemies die from the hit that sets them alight, so watch for hits igniting things instead.
       const ignite = s.ignite;
       s.ignite = function (target) { seen.burning = true; return ignite.call(this, target); };
-      s.invulnUntil = Infinity;
-      for (let i = 0; i < 600; i++) {
-        if (app.state === 'shop') document.querySelector('#shop [data-action=continue]').click();
-        __step(1);
-        seen.stars = Math.max(seen.stars, s.stars.filter(st => st.visible).length);
-        for (const b of s.bullets.getChildren()) {
-          if (b.texture.key.startsWith('axe~')) seen.axe = true; // (shots use glowing copies of their sprite: axe~4ff0ff)
-          if (b.texture.key.startsWith('boomerang~') && b.returning) seen.boomerangBack = true;
+      const play = frames => {
+        for (let i = 0; i < frames; i++) {
+          if (app.state === 'shop') document.querySelector('#shop [data-action=continue]').click();
+          s.invulnUntil = Infinity;
+          __step(1);
+          seen.stars = Math.max(seen.stars, s.stars.filter(st => st.visible).length);
+          for (const b of s.bullets.getChildren()) {
+            if (b.texture.key.startsWith('axe~')) seen.axe = true; // (shots use glowing copies of their sprite: axe~4ff0ff)
+            if (b.texture.key.startsWith('boomerang~') && b.returning) seen.boomerangBack = true;
+          }
+          if ([...s.enemies.getChildren(), s.boss].some(e => e?.burnUntil > s.t)) seen.burning = true;
         }
-        if ([...s.enemies.getChildren(), s.boss].some(e => e?.burnUntil > s.t)) seen.burning = true;
-      }
+      };
+      play(300);
+      // A second Underbarrel weapon replaces the axes, which sell back for half of what they cost.
+      const coins = s.coins, spent = s.spent.axes, cost = priceOf(UPGRADE.boomerang, s.owned);
+      s.buy(UPGRADE.boomerang);
+      seen.swap = { under: s.loadout.under.join(), axesGone: !s.owned.axes, refund: s.coins - (coins - cost), want: Math.floor(spent / 2) };
+      play(300);
+      s.ignite = ignite;
       return seen;
     });
     check(`${name}: later timelines' gear works (stars orbit, axes fly, boomerangs come back, fire burns)`,
       gear.stars === 2 && gear.axe && gear.boomerangBack && gear.burning, JSON.stringify(gear));
+    check(`${name}: a second Underbarrel weapon replaces the first, which sells back for half`,
+      gear.swap.under === 'boomerang' && gear.swap.axesGone && gear.swap.refund === gear.swap.want && gear.swap.want > 0, JSON.stringify(gear.swap));
     for (const id of ['stampede', 'blossom', 'thunder', 'meteor']) {
       const fired = await page.evaluate(i => {
         // The stars and dynamite bought above can clear a stage on their own, so wait for an enemy and fire in one go.
@@ -418,7 +434,8 @@ async function run(browser, name, options) {
     const future = await page.evaluate(() => {
       const s = scene(), made = [], blasts = [], spawn = s.spawnBullet, explode = s.explode;
       s.coins = 99999;
-      for (const id of ['smart', 'drone', 'molotov', 'drill', 'torpedo', 'scavenger', 'deflector', 'cannon', 'fire']) s.buy(UPGRADE[id]);
+      for (const slot of ['ammo', 'under', 'charm', 'armour', 'companion']) __clearSlot(s, slot);
+      for (const id of ['smart', 'drone', 'molotov', 'scavenger', 'deflector']) s.buy(UPGRADE[id]);
       s.spawnBullet = function (x, y, tex, angle, o) {
         made.push({ tex, home: o.home ?? 0, drone: s.drones.some(d => d.x === x && d.y === y) });
         return spawn.apply(this, arguments);
@@ -434,29 +451,44 @@ async function run(browser, name, options) {
       b.destroy();
       e.destroy();
       others.forEach(o => o.scene && o.setActive(true)); // (skip any that left the screen meanwhile)
-      for (let i = 0; i < 600; i++) {
-        if (app.state === 'shop') document.querySelector('#shop [data-action=continue]').click();
-        s.invulnUntil = Infinity;
-        __step(1);
-      }
+      const play = frames => {
+        for (let i = 0; i < frames; i++) {
+          if (app.state === 'shop') document.querySelector('#shop [data-action=continue]').click();
+          s.invulnUntil = Infinity;
+          __step(1);
+        }
+      };
+      const has = t => made.some(m => m.tex === t), combos = () => ['firebomb', 'torpedobay', 'droneswarm'].filter(id => s.combos.some(c => c.id === id)).join(',');
+      play(400);
+      // Molotovs fly straight and only burst when they hit something, so give one a while to find a target.
+      for (let i = 0; i < 900 && !blasts.some(x => x.burns); i++) play(1);
+      const r = { curved, drones: s.drones.length, droneShot: made.some(m => m.drone), molotov: has('molotov'), fireBlast: blasts.some(x => x.burns) };
+      s.buy(UPGRADE.drill); // replaces the Molotov (Underbarrel)
+      play(200);
+      r.drill = has('drillbolt');
+      s.buy(UPGRADE.torpedo); // replaces the drill
+      play(300);
+      r.torpedo = made.some(m => m.tex === 'torpedo' && m.home > 0);
+      r.combos1 = combos(); // Torpedo Bay (torpedo + Smart Rounds), Drone Swarm (drone + Smart Rounds)
+      s.buy(UPGRADE.molotov); // replaces the torpedo...
+      s.buy(UPGRADE.fire); // ...and Fire replaces Smart Rounds (Ammo): Firebomb on, the other two off
+      r.combos2 = combos();
       s.spawnBullet = spawn;
       s.explode = explode;
-      const has = t => made.some(m => m.tex === t);
-      return {
-        curved, drones: s.drones.length, droneShot: made.some(m => m.drone), molotov: has('molotov'), fireBlast: blasts.some(x => x.burns), drill: has('drillbolt'),
-        torpedo: made.some(m => m.tex === 'torpedo' && m.home > 0), coinChance: s.P.coinChance, shield: s.shield >= 1,
-        combos: ['firebomb', 'torpedobay', 'droneswarm'].filter(id => s.combos.some(c => c.id === id)).join(','),
-      };
+      return { ...r, coinChance: s.P.coinChance, shield: s.shield >= 1 };
     });
-    check(`${name}: future gear works (homing shots, drones, Molotov flames, drill bolts, homing torpedoes, Scavenger, Deflector)`,
-      future.curved && future.drones === 2 && future.droneShot && future.molotov && future.fireBlast && future.drill && future.torpedo && future.coinChance === 2 && future.shield,
+    check(`${name}: future gear works (homing shots, drone, Molotov flames, drill bolts, homing torpedoes, Scavenger, Deflector)`,
+      future.curved && future.drones === 1 && future.droneShot && future.molotov && future.fireBlast && future.drill && future.torpedo && future.coinChance === 2 && future.shield,
       JSON.stringify(future));
-    check(`${name}: future combos unlock (Firebomb, Torpedo Bay, Drone Swarm)`, future.combos === 'firebomb,torpedobay,droneswarm', future.combos);
+    check(`${name}: combos come and go with their halves (Torpedo Bay + Drone Swarm, then Firebomb)`,
+      future.combos1 === 'torpedobay,droneswarm' && future.combos2 === 'firebomb', JSON.stringify({ combos1: future.combos1, combos2: future.combos2 }));
     await shot('4d-future-gear');
-    const o2 = await page.evaluate(() => { // O2 Tank: the next wave cleared heals 1
+    const o2 = await page.evaluate(() => { // O2 Tank at level 3: the next wave cleared heals 1
       const s = scene(), wc = s.waveCleared;
       let healed = null;
-      s.buy(UPGRADE.o2tank);
+      s.coins = 9999;
+      __clearSlot(s, 'charm');
+      for (let i = 0; i < 3; i++) s.buy(UPGRADE.o2tank);
       s.waveCleared = function () { const before = this.hp; wc.call(this); healed = { before, after: this.hp }; };
       s.hp = 1;
       for (let i = 0; i < 6000 && !healed; i++) {
@@ -498,6 +530,46 @@ async function run(browser, name, options) {
       const effect = { emp: r.frozen && r.shots === 0 && r.hurt, nitro: r.fast && r.speed, orbital: r.hurt, blackhole: r.pulled >= 2 && r.stuck === 0 }[id];
       check(`${name}: ${id} active item fires and works`, r.ok && r.item === id && r.foes >= 2 && effect, JSON.stringify(r));
     }
+
+    // ----- The loadout: levels up to 3, the grid, a full two-place slot asks which one goes, smoother toughness -----
+    const levels = await page.evaluate(() => {
+      const s = scene();
+      s.coins = 9999;
+      __clearSlot(s, 'trigger');
+      const bought = [1, 2, 3, 4].map(() => !!s.buy(UPGRADE.rapid));
+      const tough = [1, 5, 6, 11, 46, 51].map(n => { const st = s.stage; s.stage = n; const v = s.enemyHp(); s.stage = st; return v; });
+      const sameSlot = COMBOS.filter(c => { const [a, b] = c.needs.map(id => UPGRADE[id].slot); return a === b && SLOTS[a].n < 2; }).map(c => c.id);
+      return { bought, level: s.owned.rapid, offered: s.rollOffers().some(u => u.id === 'rapid'), tough, sameSlot };
+    });
+    check(`${name}: buying again levels an item up to 3, then the shop stops offering it`,
+      JSON.stringify(levels.bought) === '[true,true,true,false]' && levels.level === 3 && !levels.offered, JSON.stringify(levels));
+    check(`${name}: soldier toughness rises 0.25 every level of 5 waves`, JSON.stringify(levels.tough) === '[1,1,1.25,1.5,3.25,3.5]', JSON.stringify(levels.tough));
+    check(`${name}: every combo pairs items from two different slots`, levels.sameSlot.length === 0, levels.sameSlot.join());
+    const asked = await page.evaluate(() => {
+      const s = scene();
+      s.coins = 9999;
+      __clearSlot(s, 'charm');
+      s.buy(UPGRADE.hearth);
+      s.buy(UPGRADE.map);
+      openShop(s);
+      app.shop.offers = [UPGRADE.detector, UPGRADE.rapid, UPGRADE.lucky, UPGRADE.vest];
+      renderShop();
+      document.querySelector('#shopItems [data-buy="0"]').click(); // a third charm
+      return { grid: document.querySelectorAll('#shopLoadout .slot').length, choices: [...document.querySelectorAll('#shopItems [data-replace]')].map(b => b.dataset.replace).join() };
+    });
+    await shot('4e-loadout-chooser');
+    const chosen = await page.evaluate(() => {
+      const s = scene();
+      document.querySelector('#shopItems [data-replace="map"]').click();
+      const r = { charm: s.loadout.charm.join(), note: document.getElementById('shopNote').textContent };
+      s.sys.resume(); // back to the wave (closing the shop the normal way would start the next stage)
+      app.state = 'playing';
+      showScreen(null);
+      document.getElementById('pauseBtn').hidden = false;
+      return r;
+    });
+    check(`${name}: the shop shows the loadout grid, and a full Charm slot asks which one to replace`,
+      asked.grid === 12 && asked.choices === 'hearth,map' && chosen.charm === 'hearth,detector' && /Sold your Treasure Map/.test(chosen.note), JSON.stringify({ asked, chosen }));
 
     // Same seed: same first shop and same 5 timelines. (offers1/route1 came from seed1 before buying anything.)
     const again = await firstShop(page, seed1);

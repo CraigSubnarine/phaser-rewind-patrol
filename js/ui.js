@@ -76,9 +76,22 @@ function updateMainBest() {
   $('mainBest').textContent = `Best (${DIFFICULTY[settings.difficulty].label}): ${store.get(bestKey(), 0)}`;
 }
 function buildText(s) {
-  const items = Object.entries(s.owned).map(([id, n]) => UPGRADE[id].name + (n > 1 ? ` x${n}` : '') + (UPGRADE[id].active ? ' (active)' : ''));
-  const combos = s.combos.map(c => c.name);
-  return `Build: ${items.length ? items.join(', ') : 'nothing yet'}.` + (combos.length ? ` Combos: ${combos.join(', ')}.` : '');
+  const items = Object.entries(s.owned).map(([id, n]) => UPGRADE[id].name + (n > 1 ? ` Lv${n}` : '') + (UPGRADE[id].active ? ' (active)' : ''));
+  return `Build: ${items.length ? items.join(', ') : 'nothing yet'}.` + combosText(s);
+}
+const combosText = s => (s.combos.length ? ` Combos: ${s.combos.map(c => c.name).join(', ')}.` : '');
+// The loadout grid (shop and pause): the gun's five slots, then body gear, then the companions and the active item,
+// each with the item in it and its level pips. Built only from the game's own data, so innerHTML is safe.
+const LOADOUT_ROWS = [['barrel', 'ammo', 'sight', 'trigger', 'under'], ['armour', 'boots', 'charm'], ['companion', 'active']];
+function loadoutHtml(s) {
+  return LOADOUT_ROWS.map(keys => {
+    const tiles = keys.flatMap(k => s.loadout[k].map((id, i) => {
+      const u = id && UPGRADE[id], lvl = u ? s.owned[id] : 0, label = k === 'companion' ? (i ? 'Right' : 'Left') : SLOTS[k].name;
+      const pips = u && !u.active ? `<i aria-label="level ${lvl} of ${u.max}">${'&#9679;'.repeat(lvl)}${'&#9675;'.repeat(u.max - lvl)}</i>` : '';
+      return `<div class="slot${u ? '' : ' empty'}"><span>${label}</span><b>${u ? u.name : '-'}</b>${pips}</div>`;
+    }));
+    return `<div class="loadout-row" style="--n:${tiles.length}">${tiles.join('')}</div>`;
+  }).join('');
 }
 // Restarting the scene wipes every enemy, timer and tween from the last run in one go.
 // sys.resume first: a paused scene must be running again before it restarts.
@@ -113,7 +126,8 @@ function pauseGame() {
   scene().sys.pause();
   $('pauseBtn').hidden = true;
   const s = scene();
-  $('pauseBuild').textContent = `${buildText(s)} Route: ${s.route.slice(0, TIMELINES).map(e => e.name).join(' > ')}. Seed ${app.seed}.`;
+  $('pauseLoadout').innerHTML = loadoutHtml(s);
+  $('pauseBuild').textContent = `${combosText(s)} Route: ${s.route.slice(0, TIMELINES).map(e => e.name).join(' > ')}. Seed ${app.seed}.`.trim();
   showScreen('pause');
 }
 function resumeGame() {
@@ -169,8 +183,8 @@ function openShop(s) {
   app.state = 'shop';
   s.sys.pause();
   $('pauseBtn').hidden = true;
-  app.shop = { offers: s.rollOffers(), sold: new Set(), rerolls: 0, healPrice: 8 };
-  $('shopNote').textContent = `Timeline gear is only sold in its own timeline. Mix gear from different timelines to unlock combos.`;
+  app.shop = { offers: s.rollOffers(), sold: new Set(), rerolls: 0, healPrice: 8, choosing: null };
+  $('shopNote').textContent = 'Each slot holds one item (Charm and companions: two). Buy again to level up; a new item replaces the old one and sells it back for half.';
   renderShop();
   showScreen('shop');
 }
@@ -181,18 +195,35 @@ function comboHint(u, owned) {
   }).join('');
 }
 // Card text comes only from the game's own data (no player input), so innerHTML is safe here.
+// Each card names its slot and says what buying it does: a level up, filling an empty place, or replacing something
+// (which sells back for half). In a full two-place slot (Charm, companions) tapping the card asks which one goes.
 function renderShop() {
   const s = scene(), shop = app.shop, coins = Math.floor(s.coins);
   $('shopTitle').textContent = `${s.E.name.toUpperCase()} MARKET`;
   $('shopCoins').textContent = `$${coins}  HP ${s.hp}/${s.P.maxHp}`;
+  $('shopLoadout').innerHTML = loadoutHtml(s);
   $('shopItems').replaceChildren(...shop.offers.map((u, i) => {
-    const b = document.createElement('button'), cost = priceOf(u, s.owned), have = s.owned[u.id] || 0, sold = shop.sold.has(i);
+    const cost = priceOf(u, s.owned), have = s.owned[u.id] || 0, sold = shop.sold.has(i), row = s.loadout[u.slot];
+    const choose = !have && row.length > 1 && !row.includes(null), [, old] = s.placeFor(u);
+    const refund = choose ? Math.max(...row.map(id => s.refundFor(id))) : s.refundFor(old);
+    const side = j => (u.slot === 'companion' ? `${j ? 'Right' : 'Left'}: ` : '');
+    if (shop.choosing === i) { // which one goes?
+      const box = document.createElement('div');
+      box.className = 'chooser';
+      box.innerHTML = `<b>${u.name}: replace which?</b>${row.map((id, j) => `<button data-replace="${id}"${cost > coins + s.refundFor(id) ? ' disabled' : ''}>`
+        + `${side(j)}${UPGRADE[id].name} (+$${s.refundFor(id)} back)</button>`).join('')}<button data-cancel>Keep both</button>`;
+      return box;
+    }
+    const b = document.createElement('button');
     b.className = `card${sold ? ' sold' : ''}`;
     b.dataset.buy = i;
-    b.disabled = sold || cost > coins;
-    const held = s.P.active, replaces = u.active && held && held.id !== u.id ? `<span class="combo">Replaces your ${held.name}</span>` : '';
-    b.innerHTML = `<span class="tag">${u.active ? 'ACTIVE ITEM &middot; ' : ''}${u.era ? `${ERA[u.era].name.toUpperCase()} ONLY` : 'ANY TIMELINE'}${have ? ` &middot; OWNED ${have}/${u.max}` : ''}</span>`
-      + `<b>${u.name}</b><span class="price">${sold ? 'SOLD' : `$${cost}`}</span><small>${u.desc}</small>${replaces}${comboHint(u, s.owned)}`;
+    b.disabled = sold || have >= u.max || cost > coins + refund;
+    const what = have >= u.max ? 'Max level' : have ? `Level ${have + 1} of ${u.max}`
+      : choose ? `Replaces your ${row.map((id, j) => side(j) + UPGRADE[id].name).join(' or ')} (you pick; it sells back for half)`
+        : old ? `Replaces your ${UPGRADE[old].name} (+$${refund} back)` : '';
+    b.innerHTML = `<span class="tag">${SLOTS[u.slot].name.toUpperCase()} &middot; ${u.era ? `${ERA[u.era].name.toUpperCase()} ONLY` : 'ANY TIMELINE'}</span>`
+      + `<b>${u.name}</b><span class="price">${sold ? 'SOLD' : `$${cost}`}</span><small>${u.desc}</small>`
+      + `${what ? `<span class="combo">${what}</span>` : ''}${comboHint(u, s.owned)}`;
     return b;
   }));
   const rerollCost = 3 + 2 * shop.rerolls;
@@ -200,17 +231,26 @@ function renderShop() {
   $('rerollBtn').disabled = rerollCost > coins;
   $('healBtn').textContent = `Coffee +1 HP $${shop.healPrice}`;
   $('healBtn').disabled = shop.healPrice > coins || s.hp >= s.P.maxHp;
-  $('shopBuild').textContent = buildText(s);
+  $('shopBuild').textContent = combosText(s).trim() || 'No combos yet: pair gear from two different slots.';
 }
-function shopBuy(i) {
-  const s = scene(), u = app.shop.offers[i];
-  const unlocked = s.buy(u);
-  if (!unlocked) return;
+// `replace`: which item goes, chosen in a full two-place slot.
+function shopBuy(i, replace) {
+  const s = scene(), u = app.shop.offers[i], row = s.loadout[u.slot];
+  if (!replace && !s.owned[u.id] && row.length > 1 && !row.includes(null)) { // ask which one goes first
+    app.shop.choosing = i;
+    return renderShop();
+  }
+  app.shop.choosing = null;
+  const [, old] = s.placeFor(u, replace), refund = s.refundFor(old), had = s.combos;
+  const unlocked = s.buy(u, replace);
+  if (!unlocked) return renderShop();
   app.shop.sold.add(i);
-  if (unlocked.length) {
-    $('shopNote').textContent = `COMBO UNLOCKED: ${unlocked.map(c => `${c.name} (${c.desc})`).join(' ')}`;
-    jingle([523, 659, 784, 1046, 1318]);
-  } else beep(880, 60);
+  const lost = had.filter(c => !s.combos.includes(c));
+  const notes = [old && `Sold your ${UPGRADE[old].name} for $${refund}.`, lost.length && `Lost combo: ${lost.map(c => c.name).join(', ')}.`,
+    unlocked.length && `COMBO UNLOCKED: ${unlocked.map(c => `${c.name} (${c.desc})`).join(' ')}`].filter(Boolean);
+  if (notes.length) $('shopNote').textContent = notes.join(' ');
+  if (unlocked.length) jingle([523, 659, 784, 1046, 1318]);
+  else beep(880, 60);
   renderShop();
 }
 function shopReroll() {
@@ -220,6 +260,7 @@ function shopReroll() {
   app.shop.rerolls++;
   app.shop.offers = s.rollOffers();
   app.shop.sold = new Set();
+  app.shop.choosing = null;
   beep(440, 50);
   renderShop();
 }
@@ -247,6 +288,8 @@ $('ui').addEventListener('click', e => {
   const btn = e.target.closest('button');
   if (!btn || !scene()) return;
   if (btn.dataset.buy !== undefined) return shopBuy(Number(btn.dataset.buy));
+  if (btn.dataset.replace !== undefined) return shopBuy(app.shop.choosing, btn.dataset.replace);
+  if (btn.dataset.cancel !== undefined) { app.shop.choosing = null; return renderShop(); }
   const action = btn.dataset.action;
   if (action === 'play') showStory();
   else if (action === 'start') startGame($('seedInput').value);

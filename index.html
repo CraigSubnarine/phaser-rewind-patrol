@@ -66,6 +66,17 @@
   .card small { grid-column: 1 / -1; color: var(--muted); font-size: .85rem; }
   .card .combo { grid-column: 1 / -1; color: var(--pink); font-size: .8rem; }
   .card.sold { opacity: .3; }
+  /* Choosing which item a purchase replaces, in a full two-place slot */
+  .chooser { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; text-align: left; background: var(--btn); border: 2px solid var(--pink); border-radius: 10px; }
+  .chooser button { background: var(--panel); font-size: .95rem; }
+  /* Loadout grid: one row for the gun's slots, one for body gear, one for companions and the active item */
+  .loadout { display: flex; flex-direction: column; gap: 4px; }
+  .loadout-row { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 4px; }
+  .slot { display: flex; flex-direction: column; gap: 1px; padding: 4px 3px; border-radius: 7px; background: var(--btn); text-align: center; font-size: .66rem; line-height: 1.15; }
+  .slot span { color: var(--cyan); font-size: .58rem; text-transform: uppercase; letter-spacing: .04em; }
+  .slot b { font-weight: 600; overflow-wrap: anywhere; }
+  .slot i { font-style: normal; color: var(--gold); font-size: .6rem; letter-spacing: 1px; }
+  .slot.empty { opacity: .5; }
   .shop-row { display: flex; gap: 8px; }
   .shop-row button { flex: 1; font-size: .95rem; }
 </style>
@@ -95,6 +106,7 @@
 
   <section class="screen shop" id="shop" hidden>
     <div class="shop-head"><h2 id="shopTitle">MARKET</h2><span id="shopCoins"></span></div>
+    <div class="loadout" id="shopLoadout" aria-label="Your loadout"></div>
     <p id="shopNote"></p>
     <div id="shopItems"></div>
     <div class="shop-row">
@@ -120,6 +132,7 @@
 
   <section class="screen" id="pause" hidden>
     <h2>PAUSED</h2>
+    <div class="loadout" id="pauseLoadout" aria-label="Your loadout"></div>
     <p class="build" id="pauseBuild"></p>
     <button class="primary" data-action="resume">Resume</button>
     <button data-action="settings">Settings</button>

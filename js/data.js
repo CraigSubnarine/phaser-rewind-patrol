@@ -164,144 +164,176 @@ const BASE_STATS = {
   dmg: 1, fireDelay: 220, shots: 1, bulletSpeed: 720, pierce: 0, bounce: 0,
   crit: 0, critMult: 3, bossDmg: 1, bossCritMult: 0, fullHpDmg: 0,
   moveSpeed: 560, invuln: 1500, armor: 0, shieldMax: 0, shieldRecharge: 10000,
-  magnet: 70, coinMult: 1, partners: 0, partnerPierce: 0,
+  magnet: 70, coinMult: 1, partnerDmg: 0.6, partnerPierce: 0,
   longbowEvery: 0, cannons: 0, cannonRadius: 75, cannonBounce: 0, cannonBossMult: 1,
   active: null, chargeMult: 1, broadside: 12, testudoMs: 6000, testudoShield: false, // active items
   sixShooter: 0, dynamite: 0, burn: 0, orbitals: 0, orbitRadius: 70, orbitSpeed: 3, lowHpDmg: 0, berserk: 0,
   axes: 0, axesReturn: false, boomerangs: 0, regen: 0, stageShield: false, stampedeMult: 1, dynamiteBurns: false,
-  homing: 0, drones: 0, molotovs: 0, coinChance: 1, drills: 0, waveHeal: 0, torpedoes: 0, // future gear
+  homing: 0, droneDelay: 600, molotovs: 0, coinChance: 1, drills: 0, o2Every: 0, torpedoes: 0, // future gear
 };
 
+// The loadout: every upgrade fits one kind of slot, and a slot holds one item (Charm and Companion hold two; the
+// companions walk on Vega's left and right). Buying an item again levels it up, to MAX_LEVEL (active items: 1).
+// Buying something for a full slot replaces what's there, which sells back for half of what it cost.
+const SLOTS = {
+  barrel: { name: 'Barrel', n: 1 }, ammo: { name: 'Ammo', n: 1 }, sight: { name: 'Sight', n: 1 }, trigger: { name: 'Trigger', n: 1 },
+  under: { name: 'Underbarrel', n: 1 }, armour: { name: 'Armour', n: 1 }, boots: { name: 'Boots', n: 1 }, charm: { name: 'Charm', n: 2 },
+  companion: { name: 'Companion', n: 2 }, active: { name: 'Active', n: 1 },
+};
+const MAX_LEVEL = 3;
+
 // General gear is sold in every timeline; timeline gear only in its own timeline, so each run's mix depends on
-// where you've been. `heal` heals that much on purchase.
-// Active items (`active`) charge up as you defeat enemies, then fire with the item button. Vega holds one at a time:
-// buying another swaps it out.
+// where you've been. `apply(stats, level)` runs once per level owned (level 1, 2, 3); `heal` heals that much on
+// each purchase. Active items (`active`) charge up as you defeat enemies, then fire with the item button.
 const UPGRADES = [
-  { id: 'airsupport', name: 'Air Support Radio', active: { charge: 40, effect: 'clear' }, price: 20, max: 1,
+  { id: 'airsupport', slot: 'active', name: 'Air Support Radio', active: { charge: 40, effect: 'clear' }, price: 20,
     desc: 'Active, charges with 40 kills: an air strike wipes out every enemy on screen. Bosses take a big hit.' },
-  { id: 'remote', name: 'VCR Remote', active: { charge: 60, effect: 'skip' }, price: 24, max: 1,
+  { id: 'remote', slot: 'active', name: 'VCR Remote', active: { charge: 60, effect: 'skip' }, price: 24,
     desc: 'Active, charges with 60 kills: fast-forward past the current wave. Not on boss waves or bonus levels.' },
-  { id: 'siren', name: 'Police Siren', active: { charge: 25, effect: 'freeze' }, price: 14, max: 1,
+  { id: 'siren', slot: 'active', name: 'Police Siren', active: { charge: 25, effect: 'freeze' }, price: 14,
     desc: 'Active, charges with 25 kills: enemies freeze and their shots vanish for 5 s.' },
-  { id: 'testudo', era: 'rome', name: 'Testudo', active: { charge: 30, effect: 'invuln' }, price: 16, max: 1,
+  { id: 'testudo', slot: 'active', era: 'rome', name: 'Testudo', active: { charge: 30, effect: 'invuln' }, price: 16,
     desc: 'Active, charges with 30 kills: nothing can hurt you for 6 s.' },
-  { id: 'trebuchet', era: 'england', name: 'Trebuchet Call', active: { charge: 35, effect: 'trebuchet' }, price: 18, max: 1,
+  { id: 'trebuchet', slot: 'active', era: 'england', name: 'Trebuchet Call', active: { charge: 35, effect: 'trebuchet' }, price: 18,
     desc: 'Active, charges with 35 kills: a boulder crashes down mid-screen in a huge blast. Great on bosses.' },
-  { id: 'broadside', era: 'caribbean', name: 'Broadside', active: { charge: 30, effect: 'broadside' }, price: 18, max: 1,
+  { id: 'broadside', slot: 'active', era: 'caribbean', name: 'Broadside', active: { charge: 30, effect: 'broadside' }, price: 18,
     desc: 'Active, charges with 30 kills: fire 12 exploding cannonballs in a wide fan.' },
 
-  { id: 'rapid', name: 'Rapid Fire', desc: 'Fire 20% faster.', price: 10, max: 5, apply: p => { p.fireDelay *= 0.8; } },
-  { id: 'magnum', name: 'Magnum Rounds', desc: '+50% damage.', price: 14, max: 4, apply: p => { p.dmg += 0.5; } },
-  { id: 'barrel', name: 'Extra Barrel', desc: '+1 bullet per shot, fanned out.', price: 16, max: 4, apply: p => { p.shots += 1; } },
-  { id: 'vest', name: 'Kevlar Vest', desc: '+1 max HP, and heals 1.', price: 14, max: 4, heal: 1, apply: p => { p.maxHp += 1; } },
-  { id: 'sneakers', name: 'Running Shoes', desc: 'Move 20% faster.', price: 8, max: 3, apply: p => { p.moveSpeed *= 1.2; } },
-  { id: 'detector', name: 'Metal Detector', desc: 'Pull in coins from 60% farther away.', price: 6, max: 3, apply: p => { p.magnet *= 1.6; } },
-  { id: 'lucky', name: 'Lucky Badge', desc: '+10% chance of a 3x critical hit.', price: 12, max: 3, apply: p => { p.crit += 0.1; } },
-  { id: 'partner', name: 'Backup Partner', desc: 'A partner walks beside you and shoots too.', price: 22, max: 2, apply: p => { p.partners += 1; } },
+  { id: 'rapid', slot: 'trigger', name: 'Rapid Fire', desc: 'Fire 20% faster per level.', price: 10, apply: p => { p.fireDelay *= 0.8; } },
+  { id: 'magnum', slot: 'ammo', name: 'Magnum Rounds', desc: '+50% damage per level.', price: 14, apply: p => { p.dmg += 0.5; } },
+  { id: 'barrel', slot: 'barrel', name: 'Extra Barrel', desc: '+1 bullet per shot per level, fanned out.', price: 16, apply: p => { p.shots += 1; } },
+  { id: 'vest', slot: 'armour', name: 'Kevlar Vest', desc: '+1 max HP per level, and heals 1.', price: 14, heal: 1, apply: p => { p.maxHp += 1; } },
+  { id: 'sneakers', slot: 'boots', name: 'Running Shoes', desc: 'Move 20% faster per level.', price: 8, apply: p => { p.moveSpeed *= 1.2; } },
+  { id: 'detector', slot: 'charm', name: 'Metal Detector', desc: 'Pull in coins from 60% farther away, per level.', price: 6, apply: p => { p.magnet *= 1.6; } },
+  { id: 'lucky', slot: 'sight', name: 'Lucky Badge', desc: '+10% chance of a 3x critical hit, per level.', price: 12, apply: p => { p.crit += 0.1; } },
+  { id: 'partner', slot: 'companion', name: 'Backup Partner', desc: 'A partner walks beside you and shoots too, harder with each level.', price: 22,
+    apply: (p, l) => { p.partnerDmg = 0.4 + 0.2 * l; } },
 
-  { id: 'pilum', era: 'rome', name: 'Pilum', desc: 'Shots pierce through 1 more enemy.', price: 14, max: 2, apply: p => { p.pierce += 1; } },
-  { id: 'scutum', era: 'rome', name: 'Scutum', desc: 'A shield that blocks 1 hit, recharging every 10 s.', price: 18, max: 2, apply: p => { p.shieldMax += 1; } },
-  { id: 'aquila', era: 'rome', name: 'Aquila Standard', desc: '+40% damage while at full HP.', price: 12, max: 2, apply: p => { p.fullHpDmg += 0.4; } },
+  { id: 'pilum', slot: 'ammo', era: 'rome', name: 'Pilum', desc: 'Shots pierce through 1 more enemy per level.', price: 14, apply: p => { p.pierce += 1; } },
+  { id: 'scutum', slot: 'armour', era: 'rome', name: 'Scutum', desc: 'A shield that blocks 1 hit, recharging every 10 s. +1 charge per level.', price: 18, apply: p => { p.shieldMax += 1; } },
+  { id: 'aquila', slot: 'charm', era: 'rome', name: 'Aquila Standard', desc: '+40% damage while at full HP, per level.', price: 12, apply: p => { p.fullHpDmg += 0.4; } },
 
-  { id: 'longbow', era: 'england', name: 'Longbow', desc: 'Every 4th shot adds an arrow that pierces everything for 3x damage.', price: 16, max: 1, apply: p => { p.longbowEvery = 4; } },
-  { id: 'plate', era: 'england', name: 'Plate Armor', desc: '+1 max HP and a 20% chance to shrug off a hit. Heals 1.', price: 16, max: 2, heal: 1, apply: p => { p.maxHp += 1; p.armor += 0.2; } },
-  { id: 'crossbow', era: 'england', name: 'Crossbow Bolts', desc: '+60% damage to bosses.', price: 12, max: 2, apply: p => { p.bossDmg += 0.6; } },
+  { id: 'longbow', slot: 'barrel', era: 'england', name: 'Longbow', desc: 'An arrow that pierces everything for 3x damage: every 4th shot, then every 3rd, then every 2nd.', price: 16,
+    apply: (p, l) => { p.longbowEvery = 5 - l; } },
+  { id: 'plate', slot: 'armour', era: 'england', name: 'Plate Armor', desc: '+1 max HP and a 20% chance to shrug off a hit, per level. Heals 1.', price: 16, heal: 1,
+    apply: p => { p.maxHp += 1; p.armor += 0.2; } },
+  { id: 'crossbow', slot: 'sight', era: 'england', name: 'Crossbow Bolts', desc: '+60% damage to bosses, per level.', price: 12, apply: p => { p.bossDmg += 0.6; } },
 
-  { id: 'cannon', era: 'caribbean', name: "Ship's Cannon", desc: 'Fires an exploding cannonball every 2 s (more often with each copy).', price: 18, max: 3, apply: p => { p.cannons += 1; } },
-  { id: 'ricochet', era: 'caribbean', name: 'Ricochet', desc: 'Shots bounce off the edges of the screen once more.', price: 12, max: 2, apply: p => { p.bounce += 1; } },
-  { id: 'map', era: 'caribbean', name: 'Treasure Map', desc: '+50% coins.', price: 10, max: 2, apply: p => { p.coinMult += 0.5; } },
+  { id: 'cannon', slot: 'under', era: 'caribbean', name: "Ship's Cannon", desc: 'Fires an exploding cannonball every 2 s (1.3 s, then 1 s with levels).', price: 18,
+    apply: (p, l) => { p.cannons = 0.5 + 0.5 * l; } },
+  { id: 'ricochet', slot: 'ammo', era: 'caribbean', name: 'Ricochet', desc: 'Shots bounce off the edges of the screen once more, per level.', price: 12, apply: p => { p.bounce += 1; } },
+  { id: 'map', slot: 'charm', era: 'caribbean', name: 'Treasure Map', desc: '+50% coins per level.', price: 10, apply: p => { p.coinMult += 0.5; } },
 
-  { id: 'sixshooter', era: 'west', name: 'Six-Shooter', desc: 'Every 6th shot, fan out 6 extra bullets.', price: 14, max: 1, apply: p => { p.sixShooter = 6; } },
-  { id: 'dynamite', era: 'west', name: 'Dynamite', desc: 'Enemies you take down blow up, hurting the ones nearby.', price: 18, max: 2, apply: p => { p.dynamite += 1; } },
-  { id: 'deadeye', era: 'west', name: 'Deadeye', desc: '+15% critical chance, and crits deal 4x.', price: 14, max: 1, apply: p => { p.crit += 0.15; p.critMult = 4; } },
-  { id: 'stampede', era: 'west', name: 'Stampede', active: { charge: 35, effect: 'stampede' }, price: 18, max: 1,
+  { id: 'sixshooter', slot: 'barrel', era: 'west', name: 'Six-Shooter', desc: 'Every 6th shot, fan out 6 extra bullets (8, then 10 with levels).', price: 14,
+    apply: (p, l) => { p.sixShooter = 4 + 2 * l; } },
+  { id: 'dynamite', slot: 'ammo', era: 'west', name: 'Dynamite', desc: 'Enemies you take down blow up, hurting the ones nearby. Bigger blasts with levels.', price: 18,
+    apply: (p, l) => { p.dynamite = 50 + 30 * l; } },
+  { id: 'deadeye', slot: 'sight', era: 'west', name: 'Deadeye', desc: '+15% critical chance, and crits deal 4x. Level 2: +10% more. Level 3: crits deal 5x.', price: 14,
+    apply: (p, l) => { p.crit += [0, 0.15, 0.1, 0][l]; p.critMult = l < 3 ? 4 : 5; } },
+  { id: 'stampede', slot: 'active', era: 'west', name: 'Stampede', active: { charge: 35, effect: 'stampede' }, price: 18,
     desc: 'Active, charges with 35 kills: a cattle stampede thunders up the screen, trampling everything.' },
 
-  { id: 'shuriken', era: 'japan', name: 'Shuriken Ring', desc: '2 throwing stars circle you, cutting enemies and blocking shots.', price: 18, max: 2, apply: p => { p.orbitals += 2; } },
-  { id: 'bushido', era: 'japan', name: 'Bushido', desc: '+80% damage while on your last HP.', price: 10, max: 1, apply: p => { p.lowHpDmg += 0.8; } },
-  { id: 'ninjastep', era: 'japan', name: 'Ninja Step', desc: 'Stay untouchable 40% longer after a hit, and move 15% faster.', price: 10, max: 2, apply: p => { p.invuln *= 1.4; p.moveSpeed *= 1.15; } },
-  { id: 'blossom', era: 'japan', name: 'Petal Storm', active: { charge: 30, effect: 'blossom' }, price: 18, max: 1,
+  { id: 'shuriken', slot: 'charm', era: 'japan', name: 'Shuriken Ring', desc: '2 throwing stars circle you (3, then 4 with levels), cutting enemies and blocking shots.', price: 18,
+    apply: (p, l) => { p.orbitals = 1 + l; } },
+  { id: 'bushido', slot: 'charm', era: 'japan', name: 'Bushido', desc: '+80% damage while on your last HP, per level.', price: 10, apply: p => { p.lowHpDmg += 0.8; } },
+  { id: 'ninjastep', slot: 'boots', era: 'japan', name: 'Ninja Step', desc: 'Stay untouchable 40% longer after a hit, and move 15% faster, per level.', price: 10,
+    apply: p => { p.invuln *= 1.4; p.moveSpeed *= 1.15; } },
+  { id: 'blossom', slot: 'active', era: 'japan', name: 'Petal Storm', active: { charge: 30, effect: 'blossom' }, price: 18,
     desc: 'Active, charges with 30 kills: a storm of razor petals cuts every enemy on screen and wipes out their shots.' },
 
-  { id: 'axes', era: 'norse', name: 'Throwing Axes', desc: 'Throw a spinning axe that cuts through everything, every 1.5 s (faster with each copy).', price: 16, max: 2, apply: p => { p.axes += 1; } },
-  { id: 'berserk', era: 'norse', name: 'Berserker Rage', desc: 'Fire 15% faster for every HP you are missing.', price: 12, max: 1, apply: p => { p.berserk = 0.15; } },
-  { id: 'hearth', era: 'norse', name: 'Hearth Fire', desc: 'Heal 2 HP every time you finish a level.', price: 16, max: 1, apply: p => { p.regen = 2; } },
-  { id: 'thunder', era: 'norse', name: 'Thunder Hammer', active: { charge: 30, effect: 'thunder' }, price: 18, max: 1,
+  { id: 'axes', slot: 'under', era: 'norse', name: 'Throwing Axes', desc: 'Throw a spinning axe that cuts through everything: every 1.5 s, faster with levels.', price: 16,
+    apply: (p, l) => { p.axes = l; } },
+  { id: 'berserk', slot: 'trigger', era: 'norse', name: 'Berserker Rage', desc: 'Fire 15% faster for every HP you are missing, per level.', price: 12, apply: p => { p.berserk += 0.15; } },
+  { id: 'hearth', slot: 'charm', era: 'norse', name: 'Hearth Fire', desc: 'Heal 2 HP every time you finish a level (3, then 4 with levels).', price: 16, apply: (p, l) => { p.regen = 1 + l; } },
+  { id: 'thunder', slot: 'active', era: 'norse', name: 'Thunder Hammer', active: { charge: 30, effect: 'thunder' }, price: 18,
     desc: 'Active, charges with 30 kills: 10 lightning bolts strike your enemies (and bosses).' },
 
-  { id: 'fire', era: 'stone', name: 'Fire', desc: 'Your shots set enemies alight: they keep burning for 3 s.', price: 16, max: 2, apply: p => { p.burn += 1; } },
-  { id: 'boomerang', era: 'stone', name: 'Bone Boomerang', desc: 'Every 2 s a boomerang flies out and comes back, cutting through everything.', price: 14, max: 2, apply: p => { p.boomerangs += 1; } },
-  { id: 'hide', era: 'stone', name: 'Mammoth Hide', desc: '+2 max HP (heals 2), but move 10% slower.', price: 16, max: 1, heal: 2, apply: p => { p.maxHp += 2; p.moveSpeed *= 0.9; } },
-  { id: 'meteor', era: 'stone', name: 'Meteor Shower', active: { charge: 35, effect: 'meteor' }, price: 18, max: 1,
+  { id: 'fire', slot: 'ammo', era: 'stone', name: 'Fire', desc: 'Your shots set enemies alight: they burn for 3 s, hotter with each level.', price: 16, apply: p => { p.burn += 1; } },
+  { id: 'boomerang', slot: 'under', era: 'stone', name: 'Bone Boomerang', desc: 'A boomerang flies out and comes back, cutting through everything: every 2 s, faster with levels.', price: 14,
+    apply: (p, l) => { p.boomerangs = l; } },
+  { id: 'hide', slot: 'armour', era: 'stone', name: 'Mammoth Hide', desc: '+2 max HP per level (heals 2), but move 10% slower.', price: 16, heal: 2,
+    apply: (p, l) => { p.maxHp += 2; if (l === 1) p.moveSpeed *= 0.9; } },
+  { id: 'meteor', slot: 'active', era: 'stone', name: 'Meteor Shower', active: { charge: 35, effect: 'meteor' }, price: 18,
     desc: 'Active, charges with 35 kills: meteors rain down on your enemies for 3 s.' },
 
-  { id: 'smart', era: 'chrome', name: 'Smart Rounds', desc: 'Your shots curve towards the nearest enemy.', price: 16, max: 1, apply: p => { p.homing = 3; } },
-  { id: 'drone', era: 'chrome', name: 'Drone Buddy', desc: 'A drone hovers over you and shoots at the nearest enemy.', price: 20, max: 2, apply: p => { p.drones += 1; } },
-  { id: 'cyberarm', era: 'chrome', name: 'Cyber Arm', desc: 'Fire 15% faster and hit 25% harder.', price: 14, max: 2, apply: p => { p.fireDelay *= 0.85; p.dmg += 0.25; } },
-  { id: 'emp', era: 'chrome', name: 'EMP Blast', active: { charge: 30, effect: 'emp' }, price: 18, max: 1,
+  { id: 'smart', slot: 'ammo', era: 'chrome', name: 'Smart Rounds', desc: 'Your shots curve towards the nearest enemy, more sharply with each level.', price: 16,
+    apply: (p, l) => { p.homing = 1.5 + 1.5 * l; } },
+  { id: 'drone', slot: 'companion', era: 'chrome', name: 'Drone Buddy', desc: 'A drone hovers beside you and shoots the nearest enemy, faster with each level.', price: 20,
+    apply: (p, l) => { p.droneDelay = 750 - 150 * l; } },
+  { id: 'cyberarm', slot: 'trigger', era: 'chrome', name: 'Cyber Arm', desc: 'Fire 15% faster and hit 25% harder, per level.', price: 14, apply: p => { p.fireDelay *= 0.85; p.dmg += 0.25; } },
+  { id: 'emp', slot: 'active', era: 'chrome', name: 'EMP Blast', active: { charge: 30, effect: 'emp' }, price: 18,
     desc: 'Active, charges with 30 kills: a pulse damages every enemy on screen, freezes them for 3 s and wipes out their shots.' },
 
-  { id: 'scraparmor', era: 'waste', name: 'Scrap Armor', desc: '+1 max HP and a 15% chance to shrug off a hit. Heals 1.', price: 16, max: 2, heal: 1, apply: p => { p.maxHp += 1; p.armor += 0.15; } },
-  { id: 'molotov', era: 'waste', name: 'Molotov', desc: 'Every 3 s, throw a bottle that bursts into flames and sets enemies alight.', price: 16, max: 2, apply: p => { p.molotovs += 1; } },
-  { id: 'scavenger', era: 'waste', name: 'Scavenger', desc: 'Enemies drop coins twice as often.', price: 14, max: 1, apply: p => { p.coinChance *= 2; } },
-  { id: 'nitro', era: 'waste', name: 'Nitro', active: { charge: 25, effect: 'nitro' }, price: 16, max: 1,
+  { id: 'scraparmor', slot: 'armour', era: 'waste', name: 'Scrap Armor', desc: '+1 max HP and a 15% chance to shrug off a hit, per level. Heals 1.', price: 16, heal: 1,
+    apply: p => { p.maxHp += 1; p.armor += 0.15; } },
+  { id: 'molotov', slot: 'under', era: 'waste', name: 'Molotov', desc: 'Throw a bottle that bursts into flames and sets enemies alight: every 3 s, faster with levels.', price: 16,
+    apply: (p, l) => { p.molotovs = l; } },
+  { id: 'scavenger', slot: 'charm', era: 'waste', name: 'Scavenger', desc: 'Enemies drop coins twice as often (2.5x, then 3x with levels).', price: 14,
+    apply: (p, l) => { p.coinChance = 1.5 + 0.5 * l; } },
+  { id: 'nitro', slot: 'active', era: 'waste', name: 'Nitro', active: { charge: 25, effect: 'nitro' }, price: 16,
     desc: 'Active, charges with 25 kills: for 5 s, fire three times as fast and move twice as fast.' },
 
-  { id: 'drill', era: 'mars', name: 'Plasma Drill', desc: 'Every 1.2 s, fire a drill bolt that pierces everything for 4x damage.', price: 16, max: 2, apply: p => { p.drills += 1; } },
-  { id: 'o2tank', era: 'mars', name: 'O2 Tank', desc: 'Heal 1 HP after every wave.', price: 20, max: 1, apply: p => { p.waveHeal = 1; } },
-  { id: 'jetpack', era: 'mars', name: 'Jetpack', desc: 'Move 25% faster and stay untouchable 30% longer after a hit.', price: 12, max: 2, apply: p => { p.moveSpeed *= 1.25; p.invuln *= 1.3; } },
-  { id: 'orbital', era: 'mars', name: 'Orbital Strike', active: { charge: 40, effect: 'orbital' }, price: 20, max: 1,
+  { id: 'drill', slot: 'under', era: 'mars', name: 'Plasma Drill', desc: 'Fire a drill bolt that pierces everything for 4x damage: every 1.2 s, faster with levels.', price: 16,
+    apply: (p, l) => { p.drills = l; } },
+  { id: 'o2tank', slot: 'charm', era: 'mars', name: 'O2 Tank', desc: 'Heal 1 HP after every 3rd wave (every 2nd, then every wave with levels).', price: 20,
+    apply: (p, l) => { p.o2Every = 4 - l; } },
+  { id: 'jetpack', slot: 'boots', era: 'mars', name: 'Jetpack', desc: 'Move 25% faster and stay untouchable 30% longer after a hit, per level.', price: 12,
+    apply: p => { p.moveSpeed *= 1.25; p.invuln *= 1.3; } },
+  { id: 'orbital', slot: 'active', era: 'mars', name: 'Orbital Strike', active: { charge: 40, effect: 'orbital' }, price: 20,
     desc: 'Active, charges with 40 kills: a beam from orbit hits every enemy on screen, and the boss.' },
 
-  { id: 'blaster', era: 'star', name: 'Blaster Rifle', desc: '+100% damage, but fire 15% slower.', price: 16, max: 2, apply: p => { p.dmg += 1; p.fireDelay *= 1.15; } },
-  { id: 'deflector', era: 'star', name: 'Deflector', desc: 'A shield that blocks 1 hit, recharging every 10 s.', price: 18, max: 2, apply: p => { p.shieldMax += 1; } },
-  { id: 'torpedo', era: 'star', name: 'Photon Torpedo', desc: 'Every 2.5 s, fire a torpedo that homes in on an enemy and explodes.', price: 18, max: 2, apply: p => { p.torpedoes += 1; } },
-  { id: 'blackhole', era: 'star', name: 'Black Hole', active: { charge: 35, effect: 'blackhole' }, price: 20, max: 1,
+  { id: 'blaster', slot: 'ammo', era: 'star', name: 'Blaster Rifle', desc: '+100% damage, but fire 15% slower, per level.', price: 16, apply: p => { p.dmg += 1; p.fireDelay *= 1.15; } },
+  { id: 'deflector', slot: 'armour', era: 'star', name: 'Deflector', desc: 'A shield that blocks 1 hit and recharges fast: in 6 s (4.5 s, then 3 s with levels).', price: 18,
+    apply: (p, l) => { if (l === 1) p.shieldMax += 1; p.shieldRecharge = 7500 - 1500 * l; } },
+  { id: 'torpedo', slot: 'under', era: 'star', name: 'Photon Torpedo', desc: 'Fire a torpedo that homes in on an enemy and explodes: every 2.5 s, faster with levels.', price: 18,
+    apply: (p, l) => { p.torpedoes = l; } },
+  { id: 'blackhole', slot: 'active', era: 'star', name: 'Black Hole', active: { charge: 35, effect: 'blackhole' }, price: 20,
     desc: 'Active, charges with 35 kills: a black hole pulls enemies together, then collapses on them.' },
 ];
+for (const u of UPGRADES) u.max = u.active ? 1 : MAX_LEVEL;
 const UPGRADE = Object.fromEntries(UPGRADES.map(u => [u.id, u]));
 
-// Owning both halves of a combo unlocks a bonus on top. Most pair gear from two different timelines.
+// Owning both halves of a combo unlocks a bonus on top. The halves are always in different slots (or in a slot that
+// holds two), most from two different timelines.
 const COMBOS = [
-  { id: 'volley', name: 'Volley Fire', needs: ['pilum', 'longbow'], desc: 'Longbow arrows every 2nd shot.', apply: p => { p.longbowEvery = 2; } },
-  { id: 'pinball', name: 'Pinball', needs: ['pilum', 'ricochet'], desc: 'Shots bounce one extra time.', apply: p => { p.bounce += 1; } },
+  { id: 'volley', name: 'Volley Fire', needs: ['pilum', 'longbow'], desc: 'Longbow arrows come twice as often.', apply: p => { p.longbowEvery = Math.max(1, Math.floor(p.longbowEvery / 2)); } },
+  { id: 'pinball', name: 'Pinball', needs: ['ricochet', 'barrel'], desc: 'Shots bounce one extra time.', apply: p => { p.bounce += 1; } },
   { id: 'skipping', name: 'Skipping Shot', needs: ['cannon', 'ricochet'], desc: 'Cannonballs bounce off the edges twice.', apply: p => { p.cannonBounce += 2; } },
-  { id: 'fortress', name: 'Fortress', needs: ['scutum', 'plate'], desc: 'Shield recharges twice as fast.', apply: p => { p.shieldRecharge /= 2; } },
   { id: 'battery', name: 'Siege Battery', needs: ['cannon', 'crossbow'], desc: 'Cannonballs deal triple damage to bosses.', apply: p => { p.cannonBossMult = 3; } },
   { id: 'xmarks', name: 'X Marks the Spot', needs: ['map', 'detector'], desc: 'Coins worth +50% more, pulled in from anywhere.', apply: p => { p.coinMult += 0.5; p.magnet = 9999; } },
   { id: 'ironwill', name: 'Iron Will', needs: ['aquila', 'vest'], desc: 'The full-HP damage bonus is doubled.', apply: p => { p.fullHpDmg *= 2; } },
   { id: 'archer', name: 'Archer Partner', needs: ['partner', 'longbow'], desc: 'Partners shoot piercing arrows.', apply: p => { p.partnerPierce = 99; } },
-  { id: 'bullseye', name: 'Bullseye', needs: ['lucky', 'crossbow'], desc: 'Critical hits on bosses deal 5x.', apply: p => { p.bossCritMult = 5; } },
+  { id: 'bullseye', name: 'Bullseye', needs: ['lucky', 'longbow'], desc: 'Critical hits on bosses deal 5x.', apply: p => { p.bossCritMult = 5; } },
   { id: 'fullbroadside', name: 'Full Broadside', needs: ['broadside', 'cannon'], desc: 'Broadside fires 20 cannonballs.', apply: p => { p.broadside = 20; } },
   { id: 'shieldwall', name: 'Shield Wall', needs: ['testudo', 'scutum'], desc: 'Testudo lasts 10 s and refills your shield.', apply: p => { p.testudoMs = 10000; p.testudoShield = true; } },
   { id: 'gunship', name: 'Gunship', needs: ['airsupport', 'partner'], desc: 'Air Support charges twice as fast.', apply: p => { p.chargeMult = 2; } },
-  { id: 'gunslinger', name: 'Gunslinger', needs: ['sixshooter', 'barrel'], desc: 'The Six-Shooter fans out 12 bullets.', apply: p => { p.sixShooter = 12; } },
+  { id: 'gunslinger', name: 'Gunslinger', needs: ['sixshooter', 'deadeye'], desc: 'The Six-Shooter fans out 6 more bullets.', apply: p => { p.sixShooter += 6; } },
   { id: 'chainreaction', name: 'Chain Reaction', needs: ['dynamite', 'cannon'], desc: 'Dynamite blasts are twice as big.', apply: p => { p.dynamite *= 2; } },
-  { id: 'wildfire', name: 'Wildfire', needs: ['dynamite', 'fire'], desc: 'Dynamite blasts set everything they hit on fire.', apply: p => { p.burn = Math.max(p.burn, 1); p.dynamiteBurns = true; } },
+  { id: 'wildfire', name: 'Wildfire', needs: ['dynamite', 'molotov'], desc: 'Dynamite blasts set everything they hit on fire.', apply: p => { p.dynamiteBurns = true; } },
   { id: 'firearrows', name: 'Fire Arrows', needs: ['fire', 'longbow'], desc: 'Burning damage is doubled.', apply: p => { p.burn *= 2; } },
   { id: 'whirlwind', name: 'Whirlwind', needs: ['shuriken', 'ricochet'], desc: 'Throwing stars circle wider and twice as fast.', apply: p => { p.orbitRadius = 100; p.orbitSpeed = 6; } },
-  { id: 'laststand', name: 'Last Stand', needs: ['bushido', 'berserk'], desc: 'On your last HP, damage and fire rate double again.', apply: p => { p.lowHpDmg += 1; p.berserk = 0.3; } },
-  { id: 'returnaxe', name: 'Returning Axes', needs: ['axes', 'boomerang'], desc: 'Throwing axes come back like boomerangs.', apply: p => { p.axesReturn = true; } },
+  { id: 'laststand', name: 'Last Stand', needs: ['bushido', 'berserk'], desc: 'On your last HP, damage and fire rate double again.', apply: p => { p.lowHpDmg += 1; p.berserk *= 2; } },
+  { id: 'returnaxe', name: 'Returning Axes', needs: ['axes', 'shuriken'], desc: 'Throwing axes come back like boomerangs.', apply: p => { p.axesReturn = true; } },
   { id: 'megastampede', name: 'Mammoth Stampede', needs: ['stampede', 'hide'], desc: 'Stampede deals double damage.', apply: p => { p.stampedeMult = 2; } },
   { id: 'shieldmaiden', name: 'Shield Maiden', needs: ['hearth', 'scutum'], desc: 'Finishing a level also refills your shield.', apply: p => { p.stageShield = true; } },
   { id: 'firebomb', name: 'Firebomb', needs: ['molotov', 'fire'], desc: 'Molotovs fly twice as often.', apply: p => { p.molotovs *= 2; } },
   { id: 'scrapyard', name: 'Scrapyard', needs: ['scavenger', 'map'], desc: 'Coins are worth 50% more.', apply: p => { p.coinMult += 0.5; } },
-  { id: 'torpedobay', name: 'Torpedo Bay', needs: ['torpedo', 'cannon'], desc: 'Photon torpedoes fire twice as often.', apply: p => { p.torpedoes *= 2; } },
-  { id: 'forcefield', name: 'Force Field', needs: ['deflector', 'scutum'], desc: '+1 more shield charge.', apply: p => { p.shieldMax += 1; } },
-  { id: 'rocketboots', name: 'Rocket Boots', needs: ['jetpack', 'sneakers'], desc: 'Move 30% faster again.', apply: p => { p.moveSpeed *= 1.3; } },
-  { id: 'droneswarm', name: 'Drone Swarm', needs: ['drone', 'smart'], desc: 'One more drone.', apply: p => { p.drones += 1; } },
-  { id: 'overclock', name: 'Overclock', needs: ['cyberarm', 'rapid'], desc: 'Fire 25% faster again.', apply: p => { p.fireDelay *= 0.75; } },
+  { id: 'torpedobay', name: 'Torpedo Bay', needs: ['torpedo', 'smart'], desc: 'Photon torpedoes fire twice as often.', apply: p => { p.torpedoes *= 2; } },
+  { id: 'rocketboots', name: 'Rocket Boots', needs: ['jetpack', 'nitro'], desc: 'Move 30% faster again.', apply: p => { p.moveSpeed *= 1.3; } },
+  { id: 'droneswarm', name: 'Drone Swarm', needs: ['drone', 'smart'], desc: 'The drone fires twice as fast.', apply: p => { p.droneDelay /= 2; } },
+  { id: 'overclock', name: 'Overclock', needs: ['cyberarm', 'blaster'], desc: 'Fire 25% faster again.', apply: p => { p.fireDelay *= 0.75; } },
   { id: 'lifesupport', name: 'Life Support', needs: ['o2tank', 'hearth'], desc: '+1 max HP, and Hearth Fire heals 1 more.', apply: p => { p.maxHp += 1; p.regen += 1; } },
+  // ponytail: Fortress (Scutum + Medic) and Force Field (Deflector + Shield Bot) come back with those companions (step 2).
 ];
 
-// Vega's stats from the upgrades owned ({ id: copies }). Combos apply after every upgrade, so they can scale them.
+// Vega's stats from the upgrades owned ({ id: level }). Combos apply after every upgrade, so they can scale them.
 function computeStats(owned, maxHp) {
   const stats = { ...BASE_STATS, maxHp };
-  for (const u of UPGRADES) for (let i = 0; i < (owned[u.id] || 0); i++) u.apply?.(stats);
+  for (const u of UPGRADES) for (let l = 1; l <= (owned[u.id] || 0); l++) u.apply?.(stats, l);
   stats.active = UPGRADES.find(u => u.active && owned[u.id]) ?? null;
   const combos = COMBOS.filter(c => c.needs.every(id => owned[id]));
   for (const c of combos) c.apply(stats);
   return { stats, combos };
 }
-// Each copy you already own makes the next one cost 50% more.
+// Each level costs 50% more than the last.
 const priceOf = (u, owned) => Math.round(u.price * (1 + 0.5 * (owned[u.id] || 0)));

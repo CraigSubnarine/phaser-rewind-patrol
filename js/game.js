@@ -85,6 +85,7 @@ class Play extends Phaser.Scene {
     this.bonusRng = new Phaser.Math.RandomDataGenerator([`${app.seed}/bonus`]); // which mini-bosses lead into a bonus level
     this.stars = []; // Shuriken Ring
     Object.assign(this, {
+      loadout: Object.fromEntries(Object.entries(SLOTS).map(([k, s]) => [k, Array(s.n).fill(null)])), spent: {}, // see SLOTS
       score: 0, coins: 0, owned: {}, combos: [], parts: 0, best: store.get(bestKey(), 0), newBest: false,
       nextFire: 0, volleys: 0, nextCannon: 0, nextEnemyShot: 0, invulnUntil: 0, shieldNextAt: 0,
       waveActive: false, spawnsLeft: 0, nextCharge: 0, boss: null, vacuum: false, stage: 0, era: 0,
@@ -110,21 +111,46 @@ class Play extends Phaser.Scene {
     const unlocked = combos.filter(c => !this.combos.includes(c));
     this.P = stats;
     this.combos = combos;
-    while (this.partners.length < stats.partners) this.partners.push(this.add.image(this.player.x, this.player.y, 'partner').setDepth(2));
-    while (this.drones.length < stats.drones) this.drones.push(this.add.image(this.player.x, this.player.y - 70, 'drone').setDepth(3));
+    // Companions: the one in the first companion slot walks on Vega's left, the other on his right.
+    for (const c of [...this.partners, ...this.drones]) c.destroy();
+    this.partners = [];
+    this.drones = [];
+    this.loadout.companion.forEach((id, i) => {
+      if (!id) return;
+      const side = i ? 1 : -1, img = this.add.image(this.player.x + side * 60, this.player.y, id).setDepth(id === 'drone' ? 3 : 2);
+      img.setVisible(id === 'drone' || this.view !== 'side'); // partners sit out vehicle stages (see setView)
+      (id === 'drone' ? this.drones : this.partners).push(Object.assign(img, { side }));
+    });
     if (this.hp > stats.maxHp) this.hp = stats.maxHp;
+    this.shield = Math.min(this.shield ?? 0, stats.shieldMax);
     return unlocked;
   }
 
-  // Called by the shop. Returns the combos the purchase unlocked (maybe none), or null if it couldn't be bought.
-  buy(u) {
-    const cost = priceOf(u, this.owned);
-    if (this.coins < cost || (this.owned[u.id] || 0) >= u.max) return null;
-    this.coins -= cost;
-    if (u.active) { // one active item at a time: a new one replaces the old, starting uncharged
-      for (const other of UPGRADES) if (other.active) delete this.owned[other.id];
-      this.charge = 0;
+  // Where buying `u` would go in its slot: [index, the item it would replace or null]. `replace` picks which one in a
+  // full two-place slot (default: the first).
+  placeFor(u, replace) {
+    const row = this.loadout[u.slot];
+    if (row.includes(u.id)) return [row.indexOf(u.id), null]; // owned: a level up
+    if (row.includes(null)) return [row.indexOf(null), null];
+    const i = replace ? row.indexOf(replace) : 0;
+    return [i, row[i]];
+  }
+  refundFor(id) { return id ? Math.floor((this.spent[id] || 0) / 2) : 0; }
+
+  // Called by the shop. Fills a slot, levels the item up, or replaces what's in the slot (which sells back for half).
+  // Returns the combos the purchase unlocked (maybe none), or null if it couldn't be bought.
+  buy(u, replace) {
+    const cost = priceOf(u, this.owned), [i, old] = this.placeFor(u, replace);
+    if (i < 0 || this.coins + this.refundFor(old) < cost || (this.owned[u.id] || 0) >= u.max) return null;
+    if (old) {
+      this.coins += this.refundFor(old);
+      delete this.owned[old];
+      delete this.spent[old];
     }
+    if (u.active && this.loadout.active[0] !== u.id) this.charge = 0; // a new active item starts uncharged
+    this.loadout[u.slot][i] = u.id;
+    this.coins -= cost;
+    this.spent[u.id] = (this.spent[u.id] || 0) + cost;
     this.owned[u.id] = (this.owned[u.id] || 0) + 1;
     const unlocked = this.refreshStats();
     if (u.heal) this.hp = Math.min(this.hp + u.heal, this.P.maxHp);
@@ -395,7 +421,7 @@ class Play extends Phaser.Scene {
 
   // Toughness follows how far into the run you are, whichever timelines the seed picked.
   enemyHp() {
-    return 1 + Math.floor((this.era + 1) / 2); // 1, 2, 2, 3, 3, then +1 every 20 stages in endless
+    return 1 + 0.25 * Math.floor((this.stage - 1) / 5); // +0.25 every level (5 waves): 1 at wave 1, 3.25 by waves 46-50
   }
 
   bossHp(main) {
@@ -471,9 +497,9 @@ class Play extends Phaser.Scene {
   // A wave is done: a few coins, and straight on to the next wave of the level.
   waveCleared() {
     this.waveActive = false;
-    if (this.P.waveHeal && this.hp > 0 && this.hp < this.P.maxHp) { // O2 Tank
-      this.hp = Math.min(this.hp + this.P.waveHeal, this.P.maxHp);
-      this.toast(`+${this.P.waveHeal} HP`, this.player.x, this.player.y - 50, '#4ff0ff');
+    if (this.P.o2Every && this.stage % this.P.o2Every === 0 && this.hp > 0 && this.hp < this.P.maxHp) { // O2 Tank
+      this.hp++;
+      this.toast('+1 HP', this.player.x, this.player.y - 50, '#4ff0ff');
     }
     this.addCoins(2 + this.era);
     this.time.delayedCall(800, () => { if (this.hp > 0) this.startStage(this.stage + 1); });
@@ -682,7 +708,7 @@ class Play extends Phaser.Scene {
         this.partners.forEach((pt, i) => {
           // On foot partners shoot from beside Vega; in a vehicle they ride along and shoot from just above/below him.
           const px = this.view === 'side' ? x : pt.x, py = this.view === 'side' ? y + (i % 2 ? 28 : -28) : pt.y - 24;
-          this.spawnBullet(px, py, P.partnerPierce ? 'arrowUp' : 'laser', aim, { dmg: 0.6 * P.dmg, pierce: P.partnerPierce, bounce: 0 });
+          this.spawnBullet(px, py, P.partnerPierce ? 'arrowUp' : 'laser', aim, { dmg: P.partnerDmg * P.dmg, pierce: P.partnerPierce, bounce: 0 });
         });
       }
     }
@@ -715,7 +741,7 @@ class Play extends Phaser.Scene {
       beep(1000, 60, 0.03);
     }
     if (this.drones.length && this.t >= this.nextDrone) { // Drone Buddy: each drone shoots at the nearest enemy
-      this.nextDrone = this.t + 600;
+      this.nextDrone = this.t + P.droneDelay;
       for (const d of this.drones) {
         const tgt = this.nearestFoe(d.x, d.y);
         if (tgt) this.spawnBullet(d.x, d.y, 'laser', Math.atan2(tgt.y - d.y, tgt.x - d.x), { dmg: 0.8 * this.dmgNow(), pierce: 0, bounce: 0 });
@@ -848,7 +874,7 @@ class Play extends Phaser.Scene {
       this.addCharge(1);
       if (this.P.dynamite) { // Dynamite: it blows up a moment later, maybe taking its neighbours with it
         const { x, y } = e;
-        this.time.delayedCall(90, () => this.explode(x, y, 60 * this.P.dynamite, 2 * this.dmgNow(), false, this.P.dynamiteBurns));
+        this.time.delayedCall(90, () => this.explode(x, y, this.P.dynamite, 2 * this.dmgNow(), false, this.P.dynamiteBurns));
       }
       const roll = Math.random(), coin = COIN_CHANCE * this.P.coinChance; // Scavenger doubles it
       if (roll < coin || ROLES[e.role].coin) this.drop('coin', e.x, e.y);
@@ -1062,13 +1088,13 @@ class Play extends Phaser.Scene {
     // Partners walk beside Vega, one on each side.
     this.partners.forEach((pt, i) => {
       const ease = Math.min(1, dt * 8);
-      pt.x += (this.player.x + (i % 2 ? 62 : -62) - pt.x) * ease;
+      pt.x += (this.player.x + pt.side * 62 - pt.x) * ease; // on its own side (left or right companion slot)
       pt.y += (this.player.y + 14 - pt.y) * ease;
     });
     // Drones hover over him, drifting side to side.
     this.drones.forEach((d, i) => {
       const ease = Math.min(1, dt * 5), a = this.t / 600 + i * Math.PI;
-      d.x += (this.player.x + Math.cos(a) * 46 - d.x) * ease;
+      d.x += (this.player.x + d.side * 46 + Math.cos(a) * 14 - d.x) * ease;
       d.y += (this.player.y - 70 + Math.sin(a) * 12 - d.y) * ease;
       d.setVisible(this.player.active);
     });
@@ -1134,6 +1160,7 @@ class Play extends Phaser.Scene {
     }
 
     // Shuriken Ring: stars circle Vega, cutting what they touch (each enemy at most every 0.4 s) and blocking shots.
+    while (this.stars.length > P.orbitals) this.stars.pop().destroy(); // sold
     while (this.stars.length < P.orbitals) this.stars.push(this.add.image(0, 0, 'shuriken').setScale(2.5).setTint(0x4ff0ff).setDepth(3));
     this.orbitAngle += P.orbitSpeed * dt;
     this.stars.forEach((st, i) => {

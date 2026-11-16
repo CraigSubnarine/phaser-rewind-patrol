@@ -8,7 +8,9 @@ const store = {
 const settings = { sound: true, difficulty: 'normal', graphics: '2d', ...store.get('rewind-settings', {}) };
 if (!DIFFICULTY[settings.difficulty]) settings.difficulty = 'normal';
 const saveSettings = () => store.set('rewind-settings', settings);
-const bestKey = () => `rewind-best-${settings.difficulty}`;
+// A daily patrol always runs on Normal; any other run on the difficulty from Settings.
+const runDifficulty = () => (app.daily ? 'normal' : settings.difficulty);
+const bestKey = () => `rewind-best-${runDifficulty()}`;
 
 // ---------- Sound: tiny synth beeps and noise bursts, no audio files. ----------
 // Browsers (iPhones especially) only allow sound after a tap or key press, so the audio is created on the first one.
@@ -47,7 +49,7 @@ const jingle = notes => notes.forEach((f, i) => setTimeout(() => beep(f, 90), i 
 const $ = id => document.getElementById(id);
 // The whole game is in one of these states; only 'playing' accepts game input.
 // 'menu' | 'story' | 'playing' | 'paused' | 'shop' | 'over' | 'won'
-const app = { state: 'menu', settingsFrom: 'main', seed: '', shop: null };
+const app = { state: 'menu', settingsFrom: 'main', seed: '', shop: null, daily: null }; // daily: today's board, during a daily patrol
 let game;
 const scene = () => game?.scene.getScene('play');
 
@@ -73,7 +75,7 @@ function updateItemBtn() {
   btn.setAttribute('aria-label', `${item.name}: ${pct >= 1 ? 'ready' : `${Math.floor(pct * 100)}% charged`}`);
 }
 function updateMainBest() {
-  $('mainBest').textContent = `Best (${DIFFICULTY[settings.difficulty].label}): ${store.get(bestKey(), 0)}`;
+  $('mainBest').textContent = `Best (${DIFFICULTY[settings.difficulty].label}): ${store.get(`rewind-best-${settings.difficulty}`, 0)}`;
 }
 function buildText(s) {
   const items = Object.entries(s.owned).map(([id, n]) => UPGRADE[id].name + (n > 1 ? ` ${TIERS[n]}` : '') + (UPGRADE[id].active ? ' (active)' : ''));
@@ -127,6 +129,7 @@ function restartScene(play) {
 }
 function toMenu() {
   app.state = 'menu';
+  app.daily = null;
   restartScene(false);
   $('pauseBtn').hidden = true;
   updateMainBest();
@@ -137,7 +140,8 @@ function showStory() {
   $('seedInput').value = randomSeed();
   showScreen('story');
 }
-function startGame(seed) {
+function startGame(seed, daily = null) {
+  app.daily = daily;
   app.seed = (seed || randomSeed()).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12) || randomSeed();
   app.state = 'playing';
   restartScene(true);
@@ -163,9 +167,14 @@ function resumeGame() {
   $('pauseBtn').hidden = false;
   document.activeElement?.blur();
 }
+// Today's patrol, the same for everyone (by the UTC date): seed DAY261116 and the board daily-2026-11-16.
+const today = () => new Date().toISOString().slice(0, 10);
+function startDaily() { startGame(`DAY${today().slice(2).replace(/-/g, '')}`, `daily-${today()}`); }
+// Settings, the leaderboard and the name screen go back to wherever they were opened from.
+function setBack() { app.settingsFrom = { paused: 'pause', over: 'end', won: 'end' }[app.state] ?? 'main'; }
 function openSettings() {
   // Difficulty is locked mid-game; changing it means starting over, so that's done from the main menu.
-  app.settingsFrom = app.state === 'paused' ? 'pause' : 'main';
+  setBack();
   const locked = app.settingsFrom === 'pause';
   $('difficulty').disabled = locked;
   $('difficultyHint').hidden = !locked;
@@ -180,8 +189,96 @@ function endGame(won, s) {
     : s.endless ? `Lost in time: ${era.name}, ${era.year}, endless wave ${s.stage}.` : `Stranded in ${era.name}, ${era.year}, on wave ${s.stage}.`)
     + ` Score ${s.score}.` + (s.newBest ? ' New best!' : '');
   $('endBuild').textContent = `${buildText(s)} Seed ${app.seed}.`;
+  $('endRank').textContent = '';
   showScreen('end');
+  postRun(s.score);
 }
+
+// ---------- Account and leaderboards (js/arcade.js: Google sign-in through the Arcade's shared Supabase) ----------
+// Signing in is optional. Boards: one per difficulty ('easy', 'normal', 'hard') and one per day ('daily-2026-11-16'),
+// each player's best. The cloud save keeps your best per difficulty.
+const account = createArcade('phaser-rewind-patrol', updateAccount);
+let syncedFor = null; // the player whose cloud save has been merged in this visit
+updateAccount(); // signed out until Supabase says otherwise (a moment after load, if you have a session)
+function updateAccount() {
+  const inn = !!account.user;
+  for (const el of document.querySelectorAll('.signin')) el.hidden = inn || !account.online;
+  for (const el of document.querySelectorAll('.acct')) el.hidden = !inn;
+  for (const el of document.querySelectorAll('.acctName')) el.textContent = account.name ?? ''; // player input: text only
+  if (inn && syncedFor !== account.user.id) { syncedFor = account.user.id; syncSave(); }
+}
+const DIFFS = Object.keys(DIFFICULTY);
+// Merges this device's bests with the cloud save (the higher of each), then posts any best this device hasn't posted
+// yet (so guest play counts once you sign in).
+async function syncSave() {
+  const here = Object.fromEntries(DIFFS.map(d => [d, store.get(`rewind-best-${d}`, 0)]));
+  const merged = await account.sync({ best: here }, (a, b) => ({ best: mergeMax(a.best, b.best) }));
+  const posted = store.get('rewind-posted', {});
+  for (const d of DIFFS) {
+    const best = merged.best[d] ?? 0;
+    store.set(`rewind-best-${d}`, best);
+    if (best > (posted[d] ?? 0)) { posted[d] = best; account.post(best, d); }
+  }
+  store.set('rewind-posted', posted);
+  if (app.state === 'menu') updateMainBest();
+}
+async function signIn() {
+  const msg = document.querySelector('.acctMsg');
+  msg.hidden = true;
+  if (!(await account.signIn())) { msg.textContent = "Can't reach sign-in right now. Check your connection."; msg.hidden = false; }
+}
+// After a run: post the score to its board if you're signed in, then show where you stand there.
+async function postRun(score) {
+  if (!account.user) return;
+  const mode = app.daily ?? runDifficulty(), label = app.daily ? "Today's patrol" : `${DIFFICULTY[mode].label} leaderboard`;
+  if (!app.daily) { const posted = store.get('rewind-posted', {}); posted[mode] = Math.max(posted[mode] ?? 0, score); store.set('rewind-posted', posted); }
+  $('endRank').textContent = 'Posting your score...';
+  const ok = await account.post(score, mode, app.seed);
+  if (!app.daily) syncSave();
+  const me = ok ? await account.standing(mode) : null;
+  if ($('end').hidden) return;
+  $('endRank').textContent = me ? `${label}: #${me.rank} of ${me.of} players` : ok ? '' : "Offline: your score will post next time you're connected.";
+}
+// The leaderboard: one tab per difficulty, and today's patrol.
+let boardLoad = 0;
+async function openBoard(tab = app.daily ? 'daily' : runDifficulty()) {
+  if ($('board').hidden) setBack();
+  const mode = tab === 'daily' ? `daily-${today()}` : tab, load = ++boardLoad;
+  for (const b of document.querySelectorAll('#boardTabs button')) b.classList.toggle('on', b.dataset.board === tab);
+  $('boardInfo').textContent = tab === 'daily' ? `Today's patrol (seed DAY${today().slice(2).replace(/-/g, '')}, Normal): each player's best.` : "Each player's best score.";
+  showScreen('board');
+  $('boardList').replaceChildren();
+  $('boardYou').textContent = 'Loading...';
+  const [rows, me] = await Promise.all([account.top(mode), account.standing(mode)]);
+  if (load !== boardLoad || $('board').hidden) return; // another tab was picked meanwhile
+  if (!rows) { $('boardYou').textContent = "Couldn't load the leaderboard. Check your connection."; return; }
+  $('boardList').replaceChildren(...rows.map((r, i) => {
+    const li = document.createElement('li');
+    if (r.me) li.className = 'me';
+    for (const [cls, text] of [['r', i + 1], ['n', r.name], ['s', r.score.toLocaleString()]]) {
+      const span = document.createElement('span');
+      span.className = cls;
+      span.textContent = text; // names are player input: never innerHTML
+      li.append(span);
+    }
+    return li;
+  }));
+  $('boardYou').textContent = !rows.length ? 'No scores yet. Be the first!'
+    : me && !rows.some(r => r.me) ? `You: #${me.rank} of ${me.of} · ${me.score.toLocaleString()}` : '';
+}
+function openName() {
+  setBack();
+  showScreen('nameScreen');
+  $('nameInput').value = account.name ?? '';
+  $('nameErr').textContent = '';
+  $('nameInput').focus({ preventScroll: true });
+}
+async function saveName() {
+  const err = await account.rename($('nameInput').value);
+  if (err) $('nameErr').textContent = err;
+  else showScreen(app.settingsFrom);
+}
+$('nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') saveName(); });
 
 // ---------- After stage 50's part: go home (the ending) or keep going in endless ----------
 function openChoice(s) {
@@ -369,10 +466,17 @@ $('ui').addEventListener('click', e => {
     if (e.detail === 0) app.shop.picked = app.shop.picked === btn.dataset.piece ? null : btn.dataset.piece;
     return renderShop();
   }
+  if (btn.dataset.board) return openBoard(btn.dataset.board);
   const action = btn.dataset.action;
   if (action === 'play') showStory();
+  else if (action === 'daily') startDaily();
+  else if (action === 'board') openBoard();
+  else if (action === 'signin') signIn();
+  else if (action === 'signout') account.signOut();
+  else if (action === 'rename') openName();
+  else if (action === 'saveName') saveName();
   else if (action === 'start') startGame($('seedInput').value);
-  else if (action === 'again') startGame();
+  else if (action === 'again') app.daily ? startDaily() : startGame();
   else if (action === 'resume') resumeGame();
   else if (action === 'menu') toMenu();
   else if (action === 'settings') openSettings();

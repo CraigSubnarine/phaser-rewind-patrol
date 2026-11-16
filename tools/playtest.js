@@ -899,7 +899,7 @@ async function run(browser, name, options) {
   });
   check(`${name}: game over screen`, (await visible(page, 'end')) && (await page.textContent('#endTitle')) === 'GAME OVER');
   await shot('9-game-over');
-  await page.click('#end button:not(.primary)');
+  await page.click('#end [data-action=menu]');
   check(`${name}: back to main menu`, await visible(page, 'main'));
 
   if (name === 'phone') { // every army's lineup: grunt, sharpshooter, charger, heavy
@@ -985,11 +985,106 @@ async function customSprites(browser) {
   check('custom sprites: no page errors', errors.length === 0, errors.join(' | '));
 }
 
+// Sign-in, the leaderboards and the daily patrol (js/arcade.js). As a guest it reads the real, shared leaderboard; a
+// real Google sign-in can't run headless, so the signed-in checks stand in a fake account and check the menus.
+async function accountChecks(browser) {
+  const page = await (await browser.newContext({ viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true })).newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.goto(url);
+  await page.waitForFunction(() => typeof scene === 'function' && !!scene(), null, { timeout: 15000 });
+  await page.evaluate(installHarness);
+  const shown = sel => page.evaluate(q => [...document.querySelectorAll(q)].filter(e => !e.hidden && e.offsetParent).length, sel);
+  const text = id => page.evaluate(i => document.getElementById(i).textContent, id);
+  const loaded = () => page.waitForFunction(() => document.getElementById('boardYou').textContent !== 'Loading...', null, { timeout: 15000 });
+  const today = new Date().toISOString().slice(0, 10), daySeed = `DAY${today.slice(2).replace(/-/g, '')}`;
+  check('account: a guest sees Sign in with Google and Daily patrol on the main menu', (await shown('#main button.signin')) === 1 && (await shown('#main [data-action=daily]')) === 1);
+  await page.tap('#main [data-action=board]');
+  await loaded();
+  const g = await page.evaluate(() => ({ you: document.getElementById('boardYou').textContent, tab: document.querySelector('#boardTabs .on')?.dataset.board }));
+  check('account: the leaderboard opens on your difficulty and loads for a guest', g.tab === 'normal' && !g.you.startsWith("Couldn't"), JSON.stringify(g));
+  await page.tap('#boardTabs [data-board=daily]');
+  await loaded();
+  check("account: the Today tab is today's patrol, with its seed", (await text('boardInfo')).includes(daySeed));
+  await page.screenshot({ path: path.join(out, 'account-1-board-guest.png') }).catch(() => {});
+  await page.tap('#board [data-action=back]');
+  check('account: Back from the leaderboard returns to the main menu', await visible(page, 'main'));
+
+  // The daily patrol: today's seed, always on Normal (even with Hard picked in Settings).
+  await page.evaluate(() => { settings.difficulty = 'hard'; });
+  await page.tap('#main [data-action=daily]');
+  await page.evaluate(() => __step(2));
+  const daily = await page.evaluate(() => ({ seed: app.seed, board: app.daily, state: app.state, hp: scene().diff === DIFFICULTY.normal }));
+  check("account: Daily patrol starts today's seed on Normal", daily.seed === daySeed && daily.board === `daily-${today}` && daily.state === 'playing' && daily.hp, JSON.stringify(daily));
+  await page.evaluate(() => { settings.difficulty = 'normal'; scene().score = 1234; endGame(false, scene()); });
+  check("account: a guest's game over offers sign-in to post the best", (await shown('#end button.signin')) === 1);
+  await page.evaluate(() => toMenu());
+  check('account: back on the menu, the run is no longer a daily one', await page.evaluate(() => app.daily === null));
+
+  // A fake signed-in player, who played as a guest before (bests on Easy and Normal on this device).
+  await page.evaluate(() => {
+    window.__posted = [];
+    store.set('rewind-posted', {});
+    store.set('rewind-best-easy', 100);
+    store.set('rewind-best-normal', 200);
+    store.set('rewind-best-hard', 0);
+    Object.assign(account, {
+      user: { id: 'me' }, name: 'Vega Fan',
+      post: async (score, mode, seed) => { __posted.push(`${mode}:${score}${seed ? `:${seed}` : ''}`); return true; },
+      standing: async () => ({ rank: 2, of: 5, score: 4321 }),
+      top: async () => [{ name: '<img src=x onerror=alert(1)>', score: 9000, me: false }, { name: 'Vega Fan', score: 4321, me: true }],
+      sync: async data => data,
+    });
+    updateAccount();
+    updateAccount(); // a second change (say, a new name) mustn't post the same bests again
+  });
+  await page.waitForTimeout(200);
+  const first = await page.evaluate(() => ({ posted: __posted.slice().sort(), name: document.querySelector('#main .acctName').textContent }));
+  check('account: signed in, the main menu says who you are', first.name === 'Vega Fan' && (await shown('#main button.signin')) === 0, JSON.stringify(first));
+  check("account: signing in posts this device's bests once, one per difficulty", JSON.stringify(first.posted) === '["easy:100","normal:200"]', JSON.stringify(first.posted));
+  await startRun(page, 'ACCT1');
+  await page.evaluate(() => { __posted.length = 0; scene().score = 4321; endGame(false, scene()); });
+  await page.waitForFunction(() => document.getElementById('endRank').textContent.includes('#'), null, { timeout: 5000 }).catch(() => {});
+  const run = { rank: await text('endRank'), posted: await page.evaluate(() => __posted) };
+  check('account: a run posts to its difficulty board (with its seed) and shows your rank', run.rank === 'Normal leaderboard: #2 of 5 players' && JSON.stringify(run.posted) === '["normal:4321:ACCT1"]', JSON.stringify(run));
+  await page.screenshot({ path: path.join(out, 'account-2-end.png') }).catch(() => {});
+  await page.tap('#end [data-action=board]');
+  await page.waitForFunction(() => document.querySelectorAll('#boardList li').length === 2, null, { timeout: 5000 });
+  const board = await page.evaluate(() => ({ tab: document.querySelector('#boardTabs .on')?.dataset.board, me: document.querySelector('#boardList li.me .n')?.textContent, injected: !!document.querySelector('#boardList img') }));
+  check("account: the board opens on that run's difficulty, highlights you, and shows names as plain text", board.tab === 'normal' && board.me === 'Vega Fan' && !board.injected, JSON.stringify(board));
+  await page.screenshot({ path: path.join(out, 'account-3-board.png') }).catch(() => {});
+  await page.tap('#board [data-action=back]');
+  check('account: Back from the board returns to the end screen', await visible(page, 'end'));
+  await page.evaluate(() => { __posted.length = 0; });
+  await page.tap('#end [data-action=again]');
+  await page.evaluate(() => toMenu());
+  await page.tap('#main [data-action=daily]');
+  await page.evaluate(() => { __step(2); __posted.length = 0; scene().score = 999; endGame(false, scene()); });
+  await page.waitForFunction(() => document.getElementById('endRank').textContent.includes('#'), null, { timeout: 5000 }).catch(() => {});
+  const day = { rank: await text('endRank'), posted: await page.evaluate(() => __posted) };
+  check("account: a daily patrol posts to today's board and shows your rank there", day.rank === "Today's patrol: #2 of 5 players" && JSON.stringify(day.posted) === JSON.stringify([`daily-${today}:999:${daySeed}`]), JSON.stringify(day));
+  await page.tap('#end [data-action=again]');
+  check('account: Play again after a daily patrol plays the daily again', await page.evaluate(() => app.daily !== null && app.seed.startsWith('DAY')));
+  await page.evaluate(() => toMenu());
+  await page.tap('#main [data-action=rename]');
+  await page.fill('#nameInput', 'ab');
+  await page.tap('#nameScreen [data-action=saveName]');
+  check('account: a name that breaks the rules gets a message, not a save', (await text('nameErr')).includes('3-20'));
+  await page.tap('#nameScreen [data-action=back]');
+  await page.screenshot({ path: path.join(out, 'account-4-menu-signed-in.png') }).catch(() => {});
+  await page.tap('#main [data-action=signout]');
+  await page.waitForFunction(() => !document.querySelector('#main button.signin').hidden, null, { timeout: 5000 }).catch(() => {});
+  check('account: Sign out shows Sign in again', (await shown('#main button.signin')) === 1 && (await shown('#main .acct')) === 0);
+  check('account: no page errors', errors.length === 0, errors.join(' | '));
+  await page.context().close();
+}
+
 (async () => {
   const server = await serve(path.resolve(__dirname, '..'));
   url = `${server.url}/index.html`;
   const browser = await chromium.launch();
   try {
+    await accountChecks(browser);
     await customSprites(browser);
     await run(browser, 'phone', { viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true });
     await run(browser, 'desktop', { viewport: { width: 1280, height: 720 } });

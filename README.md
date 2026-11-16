@@ -45,7 +45,7 @@ No build step and no asset files: the pixel art is drawn from text grids in the 
 
 - **Score:** yes; best kept per difficulty on this device.
 - **Roguelike runs:** yes. Seeded route (5 of 11 timelines), seeded shop and bonus levels, upgrades, combos and active items bought between levels, endless mode.
-- **Leaderboard:** not yet; waits for the shared Supabase backend (Google sign-in). A daily seed would make a good second board.
+- **Leaderboards:** yes (2026-11-16), through optional Google sign-in on the Arcade's shared backend (`js/arcade.js`). There's a board per difficulty (`easy`, `normal`, `hard`) and one per day for the **Daily patrol** (`daily-<UTC date>`): today's seed (`DAY261116`) for everyone, always on Normal. Signed in, a run posts its score (with its seed) and the end screen shows your rank. The main menu shows your player name (Change name / Sign out), and your best per difficulty is kept in a cloud save. Guests play as before, and their bests post the first time they sign in.
 - **Co-op / versus:** not yet.
 
 ## Your own sprites
@@ -58,6 +58,7 @@ Any built-in sprite can be swapped for your own PNG: put it in `assets/sprites/`
 - `js/data.js`: constants, timelines, stage table, difficulty, upgrades, combos, and the pure `computeStats` / `priceOf` helpers.
 - `js/art.js`: pixel-art grids, Vega's walk frames, and the road tiles.
 - `js/ui.js`: settings, sound, menus, the shop screen, the item button, input.
+- `js/arcade.js`: Google sign-in, leaderboards and cloud saves through the Arcade's shared Supabase backend. The same file goes in every game (see `GameDev/CLAUDE.md`).
 - `js/models3d.js`, `js/view3d.js`: the 3D view's models, and the view itself (three.js 0.149 from a CDN).
 - `js/game.js`: the Phaser scene (stage flow, shooting, enemies, bosses, items). `preload()` loads your own sprites; `create()` generates the rest.
 - `assets/`: your own sprites (`sprites/`) and the templates to draw them from (`templates/`).

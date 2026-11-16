@@ -28,7 +28,7 @@ class Play extends Phaser.Scene {
         this.anims.create({ key: `${key}-idle`, frames: [{ key: `${key}0` }, { key: `${key}1` }], frameRate: 3, repeat: -1 });
       }
     }
-    this.diff = DIFFICULTY[settings.difficulty];
+    this.diff = DIFFICULTY[runDifficulty()]; // the daily patrol is always on Normal, so its board is fair
     this.t = 0; // game time that stops while paused (update() isn't called then)
 
     this.cameras.main.setBackgroundColor(0x140a26);

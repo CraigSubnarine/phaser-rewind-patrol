@@ -43,6 +43,22 @@
   .row input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--cyan); }
   #seedInput { font: 600 1rem/1 monospace; width: 9em; padding: 8px; border: 1px solid var(--muted); border-radius: 6px; background: var(--bg); color: var(--text); text-transform: uppercase; user-select: text; -webkit-user-select: text; }
   .hint { font-size: .85rem; }
+  /* Account and leaderboards (js/arcade.js). */
+  .screen [hidden] { display: none !important; }
+  .pair { display: flex; gap: 8px; }
+  .pair button { flex: 1; }
+  .screen p.acct b { color: var(--text); }
+  #nameInput { font: inherit; font-size: 1.05rem; min-height: 48px; padding: 0 12px; border: 1px solid var(--muted); border-radius: 10px; background: var(--bg); color: var(--text); user-select: text; -webkit-user-select: text; touch-action: manipulation; }
+  #nameInput:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
+  #boardTabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  #boardTabs button { font-size: .9rem; padding: 0 2px; }
+  #boardTabs button.on { background: var(--cyan); color: #10232a; font-weight: 700; }
+  #boardList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  #boardList li { display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 0 12px; border-radius: 8px; background: var(--btn); font-weight: 700; text-align: left; }
+  #boardList li.me { box-shadow: inset 0 0 0 2px var(--gold); }
+  #boardList .r { width: 1.8em; color: var(--muted); }
+  #boardList .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #boardList .s { font-family: monospace; color: var(--gold); }
   .build { font-size: .85rem; text-align: left; }
   #pauseBtn { position: fixed; z-index: 1; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); width: 48px; padding: 0; opacity: .85; }
   /* Active item: bottom-right, its bar fills as it charges; it glows when ready. */
@@ -106,8 +122,37 @@
     <p>An 80s cop. A busted time machine. Every army in history.</p>
     <p id="mainBest"></p>
     <button class="primary" data-action="play">Play</button>
-    <button data-action="settings">Settings</button>
+    <button data-action="daily">Daily patrol</button>
+    <p class="hint">Today's run: the same seed for everyone, on Normal. Best score of the day wins.</p>
+    <div class="pair"><button data-action="board">Leaderboard</button><button data-action="settings">Settings</button></div>
+    <button class="signin" data-action="signin" hidden>Sign in with Google</button>
+    <p class="hint signin" hidden>Sign in to post your scores and keep your best on any device.</p>
+    <p class="acct" hidden>Playing as <b class="acctName"></b></p>
+    <div class="pair acct" hidden><button data-action="rename">Change name</button><button data-action="signout">Sign out</button></div>
+    <p class="hint acctMsg" hidden></p>
     <a href="../">&larr; Back to Arcade</a>
+  </section>
+  <section class="screen" id="board" hidden>
+    <h2>LEADERBOARD</h2>
+    <div id="boardTabs">
+      <button data-board="easy">Easy</button>
+      <button data-board="normal">Normal</button>
+      <button data-board="hard">Hard</button>
+      <button data-board="daily">Today</button>
+    </div>
+    <p class="hint" id="boardInfo">Each player's best score.</p>
+    <ol id="boardList"></ol>
+    <p id="boardYou"></p>
+    <button class="signin" data-action="signin" hidden>Sign in with Google to join</button>
+    <button class="primary" data-action="back">Back</button>
+  </section>
+  <section class="screen" id="nameScreen" hidden>
+    <h2>PLAYER NAME</h2>
+    <p>Other players see this on the leaderboard.</p>
+    <input type="text" id="nameInput" maxlength="20" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Player name">
+    <p class="hint" id="nameErr"></p>
+    <button class="primary" data-action="saveName">Save</button>
+    <button data-action="back">Cancel</button>
   </section>
 
   <section class="screen story" id="story" hidden>
@@ -175,16 +220,20 @@
     <h2 id="endTitle"></h2>
     <p id="endText"></p>
     <p class="build" id="endBuild"></p>
+    <p id="endRank"></p>
     <button class="primary" data-action="again">Play again</button>
-    <button data-action="menu">Main menu</button>
+    <button class="signin" data-action="signin" hidden>Sign in to post your best</button>
+    <div class="pair"><button data-action="board">Leaderboard</button><button data-action="menu">Main menu</button></div>
   </section>
 </div>
 <button id="pauseBtn" aria-label="Pause" hidden>&#10074;&#10074;</button>
 <button id="itemBtn" hidden><span id="itemName"></span><span class="meter"><span></span></span></button>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
 <script src="assets/sprites/list.js"></script>
 <script src="js/data.js"></script>
 <script src="js/art.js"></script>
+<script src="js/arcade.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/models3d.js"></script>
 <script src="js/view3d.js"></script>

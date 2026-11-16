@@ -39,7 +39,7 @@ No build step and no asset files: the pixel art is drawn from text grids in the 
 - **Combos** (`COMBOS`, 29): owning both halves unlocks a bonus, e.g. Pilum + Longbow = Volley Fire, Dynamite + Ship's Cannon = Chain Reaction, Throwing Axes + Shuriken Ring = Returning Axes, Bushido + Berserker Rage = Last Stand, Molotov + Fire = Firebomb, Photon Torpedo + Smart Rounds = Torpedo Bay. Replace one half and the combo goes too. Since each run visits a different 5 timelines, which combos are even possible changes from run to run. Shop cards say which combo an item starts or completes.
 - **Seeds:** every run has a seed (shown on the story screen, pause menu and end screen; you can type your own). The same seed gives the same 5 timelines, the same endless timelines and the same shop offers. The pause menu shows the run's route.
 - Menu, story screen, settings (difficulty, sound, graphics), pause, game over and win screens. Best score kept per difficulty.
-- **3D view (beta)** (Settings: Graphics 3D, switches straight away): the same game drawn with three.js from a chase camera behind Vega, the road running off into the distance. Phaser still runs everything; `js/view3d.js` draws its objects in 3D every frame. Rome's army and bosses, Vega, his partner and the pickups are low-poly models (`js/models3d.js`); other timelines are shown as upright cut-outs of their sprites until their models are built, and bonus chases are still 2D. Plan: `GameDev/rewind-patrol-backpack-3d-plan.md`.
+- **3D view (the default; Settings: Graphics switches between 3D and 2D, straight away):** the same game seen from a chase camera behind Vega, the road running off into the distance, with every character, shot and pickup drawn as its own pixel sprite standing in the 3D world (Craig's pick over 3D models). The camera frames the play area exactly: enemies come in at the top edge, Vega walks right down to the bottom. Phaser still runs everything; `js/view3d.js` (three.js 0.149 from a CDN) draws its objects in 3D every frame, with the HUD, banners and taunts as text on top. Bonus chases are still 2D.
 
 ## Replay and competition (Arcade standard)
 
@@ -59,7 +59,7 @@ Any built-in sprite can be swapped for your own PNG: put it in `assets/sprites/`
 - `js/art.js`: pixel-art grids, Vega's walk frames, and the road tiles.
 - `js/ui.js`: settings, sound, menus, the shop screen, the item button, input.
 - `js/arcade.js`: Google sign-in, leaderboards and cloud saves through the Arcade's shared Supabase backend. The same file goes in every game (see `GameDev/CLAUDE.md`).
-- `js/models3d.js`, `js/view3d.js`: the 3D view's models, and the view itself (three.js 0.149 from a CDN).
+- `js/view3d.js`: the 3D view (three.js 0.149 from a CDN): Phaser's objects drawn from a chase camera, its text as HTML.
 - `js/game.js`: the Phaser scene (stage flow, shooting, enemies, bosses, items). `preload()` loads your own sprites; `create()` generates the rest.
 - `assets/`: your own sprites (`sprites/`) and the templates to draw them from (`templates/`).
 - `tools/`: `playtest.js`, `sprites.js` (register / export sprites) and `server.js` (the local web server both use).

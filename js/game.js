@@ -742,11 +742,11 @@ class Play extends Phaser.Scene {
       this.nextFire = this.t + this.fireDelay();
       this.volleys++;
       for (let i = 0; i < P.shots; i++) { // Extra Barrel fans the shots out
-        this.spawnBullet(x, y, 'laser', aim + (i - (P.shots - 1) / 2) * 0.12, { dmg: this.dmgNow(), pierce: P.pierce, bounce: P.bounce, home: P.homing });
+        this.spawnBullet(x, y, 'bulletUp', aim + (i - (P.shots - 1) / 2) * 0.12, { dmg: this.dmgNow(), pierce: P.pierce, bounce: P.bounce, home: P.homing });
       }
       if (P.sixShooter && this.volleys % 6 === 0) { // Six-Shooter: a wide fan every 6th shot
         for (let i = 0; i < P.sixShooter; i++) {
-          this.spawnBullet(x, y, 'laser', aim - 0.6 + 1.2 * i / (P.sixShooter - 1), { dmg: this.dmgNow(), pierce: P.pierce, bounce: P.bounce });
+          this.spawnBullet(x, y, 'bulletUp', aim - 0.6 + 1.2 * i / (P.sixShooter - 1), { dmg: this.dmgNow(), pierce: P.pierce, bounce: P.bounce });
         }
       }
       if (P.longbowEvery && this.volleys % P.longbowEvery === 0) {
@@ -756,7 +756,7 @@ class Play extends Phaser.Scene {
         this.partners.forEach((pt, i) => {
           // On foot partners shoot from beside Vega; in a vehicle they ride along and shoot from just above/below him.
           const px = this.view === 'side' ? x : pt.x, py = this.view === 'side' ? y + (i % 2 ? 28 : -28) : pt.y - 24;
-          this.spawnBullet(px, py, P.partnerPierce ? 'arrowUp' : 'laser', aim, { dmg: P.partnerDmg * P.dmg, pierce: P.partnerPierce, bounce: 0 });
+          this.spawnBullet(px, py, P.partnerPierce ? 'arrowUp' : 'bulletUp', aim, { dmg: P.partnerDmg * P.dmg, pierce: P.partnerPierce, bounce: 0 });
         });
       }
     }
@@ -792,7 +792,7 @@ class Play extends Phaser.Scene {
       this.nextDrone = this.t + P.droneDelay;
       for (const d of this.drones) {
         const tgt = this.nearestFoe(d.x, d.y);
-        if (tgt) this.spawnBullet(d.x, d.y, 'laser', Math.atan2(tgt.y - d.y, tgt.x - d.x), { dmg: 0.8 * this.dmgNow(), pierce: 0, bounce: 0 });
+        if (tgt) this.spawnBullet(d.x, d.y, 'bulletUp', Math.atan2(tgt.y - d.y, tgt.x - d.x), { dmg: 0.8 * this.dmgNow(), pierce: 0, bounce: 0 });
       }
     }
   }
@@ -1398,7 +1398,7 @@ class Play extends Phaser.Scene {
     beep(180, 120, 0.04);
     switch (name) {
       case 'fan': { // a spread of shots
-        const n = 5 + 2 * b.phase;
+        const n = 5 + b.phase; // few enough that the arc opens gaps to slip through as it spreads
         for (let i = 0; i < n; i++) this.shoot(x(), y(), shot, 220 * sp, -0.8 + 1.6 * i / (n - 1));
         return 400;
       }
@@ -1414,7 +1414,7 @@ class Play extends Phaser.Scene {
         return ticks(24, 85, i => { for (const a of [0, Math.PI]) this.shoot(x(), b.y, shot, 190 * sp, i * 0.33 + a); });
       case 'sweep': { // a gun sweeping across the screen and back
         const dir = b.sweepDir = -b.sweepDir;
-        return ticks(26, 60, i => this.shoot(x(), y(), shot, 300 * sp, dir * (-0.95 + 1.9 * i / 25)));
+        return ticks(16, 95, i => this.shoot(x(), y(), shot, 300 * sp, dir * (-0.95 + 1.9 * i / 15))); // gaps between bullets
       }
       case 'wall': { // a row of shots coming down, with one gap to slip through
         const gap = Phaser.Math.Between(0, 10);
@@ -1477,7 +1477,7 @@ class Play extends Phaser.Scene {
     this.tweens.add({ targets: b, x: b.x + 6, duration: 50, yoyo: true, repeat: 5, onComplete: () => {
       if (this.boss !== b) return;
       beep(160, 200, 0.05);
-      const tx = Phaser.Math.Clamp(this.player.x, b.displayWidth / 2, W - b.displayWidth / 2), ty = Math.min(this.player.y - 40, H - 120);
+      const tx = Phaser.Math.Clamp(this.player.x, b.displayWidth / 2, W - b.displayWidth / 2), ty = Math.min(this.player.y, H - 30); // right down to Vega, even at the very bottom
       this.tweens.add({ targets: b, x: tx, y: ty, duration: 550, ease: 'Quad.easeIn', yoyo: true, hold: 200, onComplete: () => { b.charging = false; } });
     } });
     return 2000;

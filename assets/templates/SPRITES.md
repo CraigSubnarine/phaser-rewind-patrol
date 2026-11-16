@@ -10,7 +10,7 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 | `vega1.png` | 70 x 80 | Walk frame: left foot forward, right heel behind. |
 | `vega2.png` | 70 x 80 | Walk frame: right foot forward, left heel behind. |
 | `partner.png` | 42 x 48 | Backup Partner, seen from above. |
-| `laser.png` | 6 x 18 | Vega's shot (points up; it's rotated to fly any direction). |
+| `bulletUp.png` | 9 x 18 | Vega's bullet, also his partner's and drone's (points up; it's rotated to fly any direction). |
 | `arrowUp.png` | 9 x 30 | Longbow arrow / Archer Partner arrow (points up). |
 | `axe.png` | 15 x 15 | Throwing axe (spins). Also Scandinavia's enemy shot. |
 | `boomerang.png` | 28 x 16 | Bone Boomerang (spins). |

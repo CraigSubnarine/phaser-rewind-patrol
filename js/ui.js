@@ -5,7 +5,7 @@ const store = {
   get(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } },
   set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} },
 };
-const settings = { sound: true, difficulty: 'normal', graphics: '2d', ...store.get('rewind-settings', {}) };
+const settings = { sound: true, difficulty: 'normal', graphics: '3d', ...store.get('rewind-settings', {}) };
 if (!DIFFICULTY[settings.difficulty]) settings.difficulty = 'normal';
 const saveSettings = () => store.set('rewind-settings', settings);
 // A daily patrol always runs on Normal; any other run on the difficulty from Settings.

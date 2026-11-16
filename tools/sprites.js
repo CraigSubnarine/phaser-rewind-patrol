@@ -71,7 +71,7 @@ function describe({ sizes, items, eras }) {
     row('vega1', 'Walk frame: left foot forward, right heel behind.'),
     row('vega2', 'Walk frame: right foot forward, left heel behind.'),
     row('partner', 'Backup Partner, seen from above.'),
-    row('laser', "Vega's shot (points up; it's rotated to fly any direction)."),
+    row('bulletUp', "Vega's bullet, also his partner's and drone's (points up; it's rotated to fly any direction)."),
     row('arrowUp', 'Longbow arrow / Archer Partner arrow (points up).'),
     row('axe', "Throwing axe (spins). Also Scandinavia's enemy shot."),
     row('boomerang', 'Bone Boomerang (spins).'),

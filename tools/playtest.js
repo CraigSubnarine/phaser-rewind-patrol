@@ -18,6 +18,7 @@ const check = (name, ok, detail = '') => {
 // Installed in the page: step the game a frame at a time (much faster than real time), and a simple bot that
 // stays invincible with a strong gun, lines up with the nearest enemy, and in the shop buys whatever it can afford.
 function installHarness() {
+  settings.graphics = '2d'; // the run plays in 2D (much faster headless); the 3D view has its own checks
   window.__T = performance.now();
   window.__step = n => { for (let i = 0; i < n; i++) { __T += 1000 / 60; game.step(__T, 1000 / 60); } };
   scene().tweens.getDelta = () => 1000 / 60; // tweens normally follow the wall clock; tie them to our frames
@@ -452,7 +453,7 @@ async function run(browser, name, options) {
       const others = s.enemies.getChildren().slice();
       others.forEach(o => o.setActive(false));
       const e = s.spawnEnemy(520, 300, 'H', { mode: 'formation', homeX: 520, homeY: 300, fromX: 520, fromY: 300, enter: 1 });
-      const b = spawn.call(s, 80, 800, 'laser', -Math.PI / 2, { dmg: 0, pierce: 0, bounce: 0, home: s.P.homing });
+      const b = spawn.call(s, 80, 800, 'bulletUp', -Math.PI / 2, { dmg: 0, pierce: 0, bounce: 0, home: s.P.homing });
       for (let i = 0; i < 20; i++) { s.invulnUntil = Infinity; s.nextFire = s.nextDrone = s.nextMolotov = s.nextDrill = s.nextTorpedo = s.t + 1000; __step(1); }
       const curved = b.active && b.body.velocity.x > 50;
       b.destroy();
@@ -737,7 +738,7 @@ async function run(browser, name, options) {
     // ----- The 3D view (Settings: Graphics 3D): Rome's army and bosses as models, other timelines as cut-outs -----
     const view = await page.evaluate(() => {
       const s = scene(), hold = on => { s.invulnUntil = Infinity; if (on) s.nextFire = s.t + 1000; };
-      settings.graphics = '3d';
+      settings.graphics = '3d'; // (the rest of the playtest runs in 2D)
       s.E = ERA.rome;
       s.road.setTexture('road-rome');
       s.formation(['SSSSS', 'GGGGG', 'CHCHC']);
@@ -745,25 +746,26 @@ async function run(browser, name, options) {
       s.nextFire = 0;
       for (let f = 0; f < 20; f++) { hold(false); __step(1); }
       const c = document.getElementById('view3d'), st = view3d.stats;
-      return { active: view3d.active, shown: !!c && !c.hidden, phaserHidden: !s.sys.settings.visible, models: st.models, enemies: st.kinds.enemy, shots: st.kinds.shot,
+      const frame = [view3d.toScreen(W / 2, -60).y, view3d.toScreen(W / 2, H).y].map(v => Math.round(v * 100) / 100);
+      return { active: view3d.active, shown: !!c && !c.hidden, phaserHidden: !s.sys.settings.visible, frame, enemies: st.kinds.enemy, shots: st.kinds.shot,
         hud: [...document.querySelectorAll('#overlay3d .label3d')].some(l => /SCORE/.test(l.textContent)) };
     });
     await page.evaluate(() => game.loop.resetDelta());
     await shot('12-3d-rome');
-    check(`${name}: 3D view: Rome's army as models, Vega's shots, the HUD as text on top (Phaser stops drawing)`,
-      view.active && view.shown && view.phaserHidden && view.models >= 12 && view.enemies >= 12 && view.shots >= 1 && view.hud, JSON.stringify(view));
+    check(`${name}: 3D view: the soldiers and Vega's shots stand in the 3D world, the HUD as text on top, and the camera frames the play area (enemies appear at the top edge, the road's end is the bottom edge)`,
+      view.active && view.shown && view.phaserHidden && view.enemies >= 12 && view.shots >= 1 && view.hud && Math.abs(view.frame[0]) <= 0.02 && Math.abs(view.frame[1] - 1) <= 0.02, JSON.stringify(view));
     const boss3d = await page.evaluate(() => {
       const s = scene();
       s.enemies.clear(true, true);
       s.spawnBoss(true); // the Iron Centurion
       for (let f = 0; f < 180; f++) { s.invulnUntil = Infinity; s.nextFire = s.t + 1000; __step(1); }
-      const r = { boss: s.boss.cfg.key, models: view3d.stats.models, bar: !document.getElementById('bossbar3d').hidden };
+      const r = { boss: s.boss.cfg.key, shown: view3d.stats.kinds.boss, bar: !document.getElementById('bossbar3d').hidden };
       s.bossColliders.forEach(c => c.destroy());
       s.bossBar.destroy();
       s.tweens.killTweensOf(s.boss);
       s.boss.destroy();
       s.boss = null;
-      s.E = ERA.chrome; // a timeline without models yet: cut-outs of its sprites
+      s.E = ERA.chrome; // another timeline's army
       s.road.setTexture('road-chrome');
       s.formation(['GGGGG', 'SHSCS']);
       for (let f = 0; f < 80; f++) { s.invulnUntil = Infinity; s.nextFire = s.t + 1000; __step(1); }
@@ -783,8 +785,8 @@ async function run(browser, name, options) {
       r.off = !view3d.active && s.sys.settings.visible && document.getElementById('view3d').hidden;
       return r;
     });
-    check(`${name}: 3D view: the boss as a model with its health bar, other timelines as cut-outs, chases in 2D, back to 2D`,
-      boss3d.boss === 'centurion' && boss3d.models >= 2 && boss3d.bar && boss3d.cutouts >= 8 && boss3d.chase2d && boss3d.back3d && boss3d.off, JSON.stringify(boss3d));
+    check(`${name}: 3D view: the boss with its health bar, another timeline's army, chases in 2D, back to 2D`,
+      boss3d.boss === 'centurion' && boss3d.shown === 1 && boss3d.bar && boss3d.cutouts >= 8 && boss3d.chase2d && boss3d.back3d && boss3d.off, JSON.stringify(boss3d));
 
     // A full route with at least two future timelines (one with a bonus chase), whose bonus plan has a chase after the
     // first mini-boss and a mini-boss with no bonus level.

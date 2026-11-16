@@ -21,7 +21,7 @@ const ART = {
   ink: ['.HHHH.', 'HHIHHH', 'HIHHHH', 'HHHHHH', 'HHHHHH', '.HHHH.'],
   orb: ['.AAAA.', 'AA11AA', 'A1111A', 'A1111A', 'AA11AA', '.AAAA.'],
   // Vega's shots (point up)
-  laser: ['11', 'BB', 'BB', 'BB', 'BB', 'BB'],
+  bulletUp: ['.6.', '666', '444', '4D4', '444', 'DDD'],
   arrowUp: ['.6.', '666', '.6.', '.8.', '.8.', '.8.', '.8.', '.8.', '.1.', '1.1'],
   // Pickups
   coin: ['.4444.', '441144', '414444', '444444', '444D44', '.4444.'],
@@ -236,7 +236,7 @@ ART.partner = ART.vega0.map(row => row.replace(/G/g, 'D').replace(/9/g, '7'));
 
 const PIXEL = {
   vega0: 5, vega1: 5, vega2: 5, partner: 3,
-  spear: 3, arrow: 3, cannonball: 3, ink: 3, orb: 3, laser: 3, arrowUp: 3, coin: 3, spark: 2, streak: 2,
+  spear: 3, arrow: 3, cannonball: 3, ink: 3, orb: 3, bulletUp: 3, arrowUp: 3, coin: 3, spark: 2, streak: 2,
   bullet: 3, shuriken: 3, axe: 3, stone: 3, icicle: 3, dynamite: 3,
   plasma: 3, scrap: 3, redbeam: 3, bolt: 3, drillbolt: 3, torpedo: 3, molotov: 3,
 };

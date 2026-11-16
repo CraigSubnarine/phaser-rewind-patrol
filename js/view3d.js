@@ -1,14 +1,19 @@
-// The 3D view (Settings: Graphics 3D). Phaser keeps running the game exactly as in 2D (waves, physics, bosses, shop,
-// all of it); this draws the same world with three.js from a chase camera behind Vega, every frame, and Phaser stops
-// drawing. The ground plane is the 2D screen laid flat: game x runs across the road, game y along it (1 unit =
-// 100 game pixels). Sprites with a model in MODELS3D become models; everything else is an upright cut-out of its
-// 2D sprite, so every timeline works while models are added. Text (HUD, banners, taunts, toasts) is drawn as HTML on
-// top. Bonus chases stay 2D for now.
+// The 3D view (Settings: Graphics, 3D is the default). Phaser keeps running the game exactly as in 2D (waves,
+// physics, bosses, shop, all of it); this draws the same world with three.js from a chase camera behind Vega, every
+// frame, and Phaser stops drawing. The ground plane is the 2D screen laid flat: game x runs across the road, game y
+// along it (1 unit = 100 game pixels). Characters, shots and pickups are their own 2D sprites standing up in the 3D
+// world (Craig's pick: the 3D angle with the 2D characters). Text (HUD, banners, taunts, toasts) is HTML on top.
+// Bonus chases are still drawn in 2D.
 const view3d = (() => {
   const U = 0.01, at = (x, y, h = 0) => new THREE.Vector3((x - W / 2) * U, h, (y - H) * U);
+  // The camera frames the play area exactly: the line where enemies appear (60 px above the 2D screen) at the top
+  // edge, the bottom of the 2D screen at the bottom edge, seen from behind at a 50 degree tilt.
+  const PITCH = 50 * Math.PI / 180, FOV = 50, zFar = -(H + 60) * U, zNear = 0;
+  const lo = PITCH - FOV / 2 * Math.PI / 180, hi = PITCH + FOV / 2 * Math.PI / 180;
+  const CAM_H = (zNear - zFar) / (1 / Math.tan(lo) - 1 / Math.tan(hi)), CAM_Z = zNear + CAM_H / Math.tan(hi), LOOK_Z = CAM_Z - CAM_H / Math.tan(PITCH);
   const things = new Map(); // Phaser object -> its 3D stand-in
   const labels = new Map(); // Phaser text, or an enemy's health bar -> its HTML element
-  const textures = new Map(); // Phaser texture key -> THREE.Texture
+  const textures = new Map(); // texture key (+ variant) -> THREE.Texture
   let r = null, active = false, idle = 0;
 
   function setup() {
@@ -18,11 +23,8 @@ const view3d = (() => {
     document.body.append(canvas, overlay);
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 80);
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x665577, 0.95));
-    const sun = new THREE.DirectionalLight(0xffffff, 0.65);
-    sun.position.set(-3, 8, 5);
-    scene.add(sun);
+    const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(FOV, W / H, 0.1, 80);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x665577, 1.1));
     // The road (the timeline's road tile, repeating into the distance) on plain ground of the tile's edge colour.
     const road = new THREE.Mesh(new THREE.PlaneGeometry(W * U, 44), new THREE.MeshLambertMaterial({ transparent: true }));
     road.rotation.x = -Math.PI / 2;
@@ -48,13 +50,23 @@ const view3d = (() => {
     r = { canvas, overlay, renderer, scene, camera, road, ground, sparks, MAXP, rings, shadow, roadKey: null };
   }
 
-  // A Phaser texture as a three.js one (made once per key). `road`: repeating along its length.
-  function tex(key, road = false) {
-    const id = road ? `road:${key}` : key;
+  // A Phaser texture as a three.js one, made once. `road`: repeating along its length. `white`: the sprite's shape in
+  // white, for the flash when something is hit.
+  function tex(key, variant = '') {
+    const id = `${key}|${variant}`;
     if (!textures.has(id)) {
-      const t = new THREE.Texture(game.textures.get(key).getSourceImage());
+      let src = game.textures.get(key).getSourceImage();
+      if (variant === 'white') {
+        const c = Object.assign(document.createElement('canvas'), { width: src.width, height: src.height }), ctx = c.getContext('2d');
+        ctx.drawImage(src, 0, 0);
+        ctx.globalCompositeOperation = 'source-in';
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, c.width, c.height);
+        src = c;
+      }
+      const t = new THREE.Texture(src);
       t.magFilter = THREE.NearestFilter;
-      if (road) {
+      if (variant === 'road') {
         t.wrapT = THREE.RepeatWrapping;
         t.repeat.set(1, 44 / 2.56);
         t.anisotropy = r.renderer.capabilities.getMaxAnisotropy();
@@ -73,9 +85,8 @@ const view3d = (() => {
 
   // What a Phaser object is, for how it's drawn.
   function kindOf(o, s) {
-    if (o === s.player) return 'vega';
+    if (o === s.player || s.partners.includes(o)) return 'hero';
     if (o === s.boss) return 'boss';
-    if (s.partners.includes(o)) return 'partner';
     if (s.drones.includes(o)) return 'drone';
     if (s.enemies.contains(o)) return 'enemy';
     if (s.bullets.contains(o) || s.enemyShots.contains(o)) return 'shot';
@@ -83,31 +94,24 @@ const view3d = (() => {
     return 'other';
   }
 
-  function make(o, kind) {
-    const key = kind === 'boss' ? o.cfg.key : kind === 'vega' || kind === 'partner' || kind === 'drone' ? kind : o.texture.key;
-    let obj = MODELS3D[key]?.();
-    if (obj) obj.userData.model = key;
-    else {
-      obj = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex(o.texture.key), transparent: true }));
-      obj.userData.mats = [obj.material];
-    }
-    if (['vega', 'partner', 'enemy', 'boss'].includes(kind)) { // a soft shadow underfoot
+  function make(kind) {
+    const obj = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true }));
+    if (['hero', 'enemy', 'boss'].includes(kind)) { // a soft shadow underfoot
       obj.userData.shadow = new THREE.Mesh(r.shadow.geo, r.shadow.mat);
       obj.userData.shadow.rotation.x = -Math.PI / 2;
       r.scene.add(obj.userData.shadow);
     }
     obj.userData.kind = kind;
-    obj.userData.base = obj.scale.x;
     r.scene.add(obj);
     return obj;
   }
 
   // Ground decals for Phaser's circles and rectangles: explosions, mortar markers, lane slams, beams...
   function decal(o) {
-    const round = o.type === 'Arc', geo = round ? new THREE.CircleGeometry(1, 28) : new THREE.PlaneGeometry(1, 1);
+    const geo = o.type === 'Arc' ? new THREE.CircleGeometry(1, 28) : new THREE.PlaneGeometry(1, 1);
     const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }));
     m.rotation.x = -Math.PI / 2;
-    m.userData = { decal: true, mats: [m.material] };
+    m.userData.decal = true;
     r.scene.add(m);
     return m;
   }
@@ -115,60 +119,39 @@ const view3d = (() => {
   function remove(obj) {
     r.scene.remove(obj);
     if (obj.userData.shadow) r.scene.remove(obj.userData.shadow);
-    for (const m of obj.userData.mats ?? []) m.dispose();
+    obj.material.dispose();
     if (obj.userData.decal) obj.geometry.dispose();
   }
 
-  // Tints and flashes on a model: white when hit, blue when frozen, orange when burning, red while winding up.
-  const GLOW = { 0x88ccff: 0x2266aa, 0xff9944: 0x993300, 0xff5050: 0x991111 };
-  function paint(obj, o, kind) {
-    const hurt = kind === 'boss' && o.texture.key.endsWith('Hurt');
-    const glow = o.isTinted && o.tintFill ? 0xffffff : hurt ? 0x881111 : o.isTinted ? GLOW[o.tintTopLeft] ?? 0 : 0;
-    for (const m of obj.userData.mats) {
-      m.opacity = o.alpha;
-      if (m.emissive) m.emissive.setHex(glow);
-      else m.color.setHex(o.isTinted && !o.tintFill ? o.tintTopLeft : 0xffffff);
-    }
-  }
-
-  function place(obj, o, kind, s, t) {
-    const d = obj.userData;
-    if (d.decal) { // lying flat on the road
-      const pos = at(o.x, o.y, 0.02 + (o.depth ?? 0) * 0.002);
-      obj.position.copy(pos);
-      obj.scale.set(o.type === 'Arc' ? o.radius * U * o.scaleX : o.width * U * o.scaleX, o.type === 'Arc' ? o.radius * U * o.scaleY : o.height * U * o.scaleY, 1);
+  // How big things stand compared with their 2D sprite: shots bigger (they have no glow in 3D), the rest as in 2D.
+  const SIZE = { shot: 1.6, pickup: 1.1 };
+  function place(obj, o, kind) {
+    if (obj.userData.decal) { // lying flat on the road
+      obj.position.copy(at(o.x, o.y, 0.02 + (o.depth ?? 0) * 0.002));
+      const round = o.type === 'Arc';
+      obj.scale.set((round ? o.radius : o.width) * U * o.scaleX, (round ? o.radius : o.height) * U * o.scaleY, 1);
       obj.material.color.setHex(o.fillColor ?? 0xffffff);
       obj.material.opacity = (o.fillAlpha ?? 1) * o.alpha;
       return;
     }
-    const sprite = !d.model;
-    let h = 0;
-    if (sprite) { // cut-outs stand on the road (shots fly at gun height), sized like their 2D sprite
-      const k = kind === 'boss' ? 1.6 : kind === 'shot' ? 1.3 : 1;
-      obj.scale.set(o.displayWidth * U * k, o.displayHeight * U * k, 1);
-      h = kind === 'shot' ? 0.35 : o.displayHeight * U * k / 2;
-      obj.material.rotation = kind === 'shot' ? -o.rotation : 0;
-      if (obj.material.map !== tex(o.texture.key)) obj.material.map = tex(o.texture.key); // animation frames
-    } else {
-      h = d.hover ?? 0;
-      if (d.spin) obj.rotation.y += d.spin / 60;
-      else if (kind === 'vega' || kind === 'partner') obj.rotation.y = Math.PI; // walking up the road, away from us
-      else if (kind !== 'drone') obj.rotation.y = Math.atan2(s.player.x - o.x, s.player.y - o.y) * 0.6; // facing Vega
-      if (d.legs) { // walking (Vega and partners always are: the road moves under them)
-        const swing = Math.sin(t / 90 + o.x) * 0.6;
-        d.legs[0].rotation.x = swing;
-        d.legs[1].rotation.x = -swing;
-      }
-      if (kind === 'boss') h = Math.abs(Math.sin(t / 300)) * 0.08; // idle bob
-      const squash = kind === 'boss' && o.texture.key.endsWith('Hurt') ? 0.9 : 1;
-      obj.scale.set(d.base, d.base * squash, d.base);
-    }
-    obj.position.copy(at(o.x, o.y, h));
-    paint(obj, o, kind);
+    // Shots skip the 2D view's bright rings (Craig: you can see them fine in 3D): just the shot, a little bigger.
+    const key = kind === 'shot' ? o.texture.key.split('~')[0] : o.texture.key, k = SIZE[kind] ?? 1;
+    const src = game.textures.get(key).getSourceImage(), w = (kind === 'shot' ? src.width * o.scaleX : o.displayWidth) * U * k;
+    const h = (kind === 'shot' ? src.height * o.scaleY : o.displayHeight) * U * k;
+    obj.scale.set(w, h, 1);
+    // Standing things put their feet where the bottom edge of their 2D sprite was, so they cover about the same
+    // patch of road (and bosses near the top of the screen keep their heads on it).
+    const feet = ['hero', 'enemy', 'boss', 'other'].includes(kind) ? o.y + o.displayHeight / 2 : o.y;
+    obj.position.copy(at(o.x, feet, kind === 'shot' ? 0.35 : kind === 'drone' ? 0.75 : h / 2));
+    const m = obj.material, flash = o.isTinted && o.tintFill, map = tex(key, flash ? 'white' : '');
+    if (m.map !== map) { m.map = map; m.needsUpdate = true; }
+    m.rotation = kind === 'shot' ? -o.rotation : 0;
+    m.color.setHex(o.isTinted && !o.tintFill ? o.tintTopLeft : 0xffffff); // blue when frozen, orange when burning...
+    m.opacity = o.alpha;
+    const d = obj.userData;
     if (d.shadow) {
-      d.shadow.position.copy(at(o.x, o.y, 0.01));
-      d.shadow.scale.setScalar(kind === 'boss' ? 0.8 : 0.22);
-      d.shadow.visible = o.visible;
+      d.shadow.position.copy(at(o.x, feet, 0.01));
+      d.shadow.scale.setScalar(Math.max(0.12, w * 0.4));
     }
   }
 
@@ -193,20 +176,18 @@ const view3d = (() => {
       lineHeight: `${px + (o.lineSpacing || 0) * scale}px`, transform: `translate(${-o.originX * 100}%, ${-o.originY * 100}%)`,
       textShadow: [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]].map(([a, b]) => `${a * sw}px ${b * sw}px 0 ${sc}`).join(','),
     });
-    return el;
   }
   // A health bar over a soldier that has been hit (like the 2D ones).
-  function healthBar(e) {
+  function healthBar(e, top) {
     let el = labels.get(e);
     if (!el) {
       el = Object.assign(document.createElement('div'), { className: 'bar3d', innerHTML: '<i></i>' });
       r.overlay.append(el);
       labels.set(e, el);
     }
-    const p = at(e.x, e.y, 0.8).project(r.camera);
+    const p = at(e.x, e.y + e.displayHeight / 2, top + 0.08).project(r.camera);
     Object.assign(el.style, { left: `${(p.x + 1) / 2 * r.w}px`, top: `${(1 - p.y) / 2 * r.h}px` });
     el.firstChild.style.width = `${Math.max(0, e.hp / e.maxHp) * 100}%`;
-    return el;
   }
 
   function draw(s) {
@@ -217,24 +198,25 @@ const view3d = (() => {
       r.renderer.setSize(rect.width, rect.height, false);
       for (const el of [r.canvas, r.overlay]) Object.assign(el.style, { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` });
     }
-    const scale = rect.width / W, t = s.t, E = s.E;
+    const scale = rect.width / W, t = s.t;
     // Road and sky follow the timeline; the road scrolls with the 2D one.
     const roadKey = (s.road.displayTexture ?? s.road.texture).key;
     if (roadKey !== r.roadKey) {
       r.roadKey = roadKey;
-      r.road.material.map = tex(roadKey, true);
+      r.road.material.map = tex(roadKey, 'road');
       r.road.material.needsUpdate = true;
       r.ground.material.color.setHex(edgeColour(roadKey));
-      const sky = roadKey === 'road-1986' ? 0x140a26 : E.sky;
+      const sky = roadKey === 'road-1986' ? 0x140a26 : s.E.sky;
       r.scene.background = new THREE.Color(sky);
       r.scene.fog = new THREE.Fog(sky, 14, 34);
     }
     r.road.material.map.offset.y = -s.road.tilePositionY / 256;
     r.road.material.opacity = s.road.alpha;
-    // The camera rides behind Vega, drifting a little with him from side to side.
-    const vx = (s.player.x - W / 2) * U * 0.4;
-    r.camera.position.set(vx, 6.2, 3.4);
-    r.camera.lookAt(vx * 0.6, 0, -4.2);
+    // The camera rides behind Vega, sliding halfway with him from side to side (the road is wider than the screen
+    // near the bottom).
+    const vx = (s.player.x - W / 2) * U * 0.5;
+    r.camera.position.set(vx, CAM_H, CAM_Z);
+    r.camera.lookAt(vx, 0, LOOK_Z);
 
     const seen = new Set();
     let n = 0;
@@ -254,7 +236,7 @@ const view3d = (() => {
       if (o.type === 'Arc' || o.type === 'Rectangle') {
         seen.add(o);
         if (!things.has(o)) things.set(o, decal(o));
-        place(things.get(o), o, 'decal', s, t);
+        place(things.get(o), o, 'decal');
         continue;
       }
       if ((o.type !== 'Image' && o.type !== 'Sprite') || o.texture.key === 'streak') continue;
@@ -262,9 +244,9 @@ const view3d = (() => {
       seen.add(o);
       let obj = things.get(o);
       if (obj && obj.userData.kind !== kind) { remove(obj); obj = null; }
-      if (!obj) things.set(o, obj = make(o, kind));
-      place(obj, o, kind, s, t);
-      if (kind === 'enemy' && o.hp < o.maxHp && o.maxHp > s.P.dmg) healthBar(o);
+      if (!obj) things.set(o, obj = make(kind));
+      place(obj, o, kind);
+      if (kind === 'enemy' && o.hp < o.maxHp && o.maxHp > s.P.dmg) healthBar(o, obj.scale.y);
     }
     pos.needsUpdate = col.needsUpdate = true;
     r.sparks.geometry.setDrawRange(0, n);
@@ -308,11 +290,13 @@ const view3d = (() => {
       if (!ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit)) return null;
       return { x: hit.x / U + W / 2, y: hit.z / U + H };
     },
+    // Where a game point shows on screen, 0-1 across and down the 3D canvas (for the playtest).
+    toScreen(x, y) { const p = at(x, y).project(r.camera); return { x: (p.x + 1) / 2, y: (1 - p.y) / 2 }; },
     get active() { return active; },
-    get stats() { // for the playtest: how many things of each kind are drawn, and how many as models
+    get stats() { // for the playtest: how many things of each kind are drawn
       const kinds = {};
       for (const o of things.values()) kinds[o.userData.kind ?? 'decal'] = (kinds[o.userData.kind ?? 'decal'] || 0) + 1;
-      return { things: things.size, models: [...things.values()].filter(o => o.userData.model).length, labels: labels.size, kinds };
+      return { things: things.size, labels: labels.size, kinds };
     },
   };
 })();

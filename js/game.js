@@ -85,7 +85,7 @@ class Play extends Phaser.Scene {
     this.bonusRng = new Phaser.Math.RandomDataGenerator([`${app.seed}/bonus`]); // which mini-bosses lead into a bonus level
     this.stars = []; // Shuriken Ring
     Object.assign(this, {
-      loadout: Object.fromEntries(Object.entries(SLOTS).map(([k, s]) => [k, Array(s.n).fill(null)])), spent: {}, // see SLOTS
+      pack: {}, packRows: BACKPACK.rows, bought: [], spent: {}, // the backpack: { id: its cells }, in buying order (see BACKPACK)
       score: 0, coins: 0, owned: {}, combos: [], parts: 0, best: store.get(bestKey(), 0), newBest: false,
       nextFire: 0, volleys: 0, nextCannon: 0, nextEnemyShot: 0, invulnUntil: 0, shieldNextAt: 0,
       waveActive: false, spawnsLeft: 0, nextCharge: 0, boss: null, vacuum: false, stage: 0, era: 0,
@@ -111,12 +111,11 @@ class Play extends Phaser.Scene {
     const unlocked = combos.filter(c => !this.combos.includes(c));
     this.P = stats;
     this.combos = combos;
-    // Companions: the one in the first companion slot walks on Vega's left, the other on his right.
+    // Companions: the first one you bought walks on Vega's left, the second on his right.
     for (const c of [...this.partners, ...this.drones]) c.destroy();
     this.partners = [];
     this.drones = [];
-    this.loadout.companion.forEach((id, i) => {
-      if (!id) return;
+    this.bought.filter(id => UPGRADE[id].companion).forEach((id, i) => {
       const side = i ? 1 : -1, img = this.add.image(this.player.x + side * 60, this.player.y, id).setDepth(id === 'drone' ? 3 : 2);
       img.setVisible(id === 'drone' || this.view !== 'side'); // partners sit out vehicle stages (see setView)
       (id === 'drone' ? this.drones : this.partners).push(Object.assign(img, { side }));
@@ -126,29 +125,41 @@ class Play extends Phaser.Scene {
     return unlocked;
   }
 
-  // Where buying `u` would go in its slot: [index, the item it would replace or null]. `replace` picks which one in a
-  // full two-place slot (default: the first).
-  placeFor(u, replace) {
-    const row = this.loadout[u.slot];
-    if (row.includes(u.id)) return [row.indexOf(u.id), null]; // owned: a level up
-    if (row.includes(null)) return [row.indexOf(null), null];
-    const i = replace ? row.indexOf(replace) : 0;
-    return [i, row[i]];
-  }
   refundFor(id) { return id ? Math.floor((this.spent[id] || 0) / 2) : 0; }
 
-  // Called by the shop. Fills a slot, levels the item up, or replaces what's in the slot (which sells back for half).
-  // Returns the combos the purchase unlocked (maybe none), or null if it couldn't be bought.
-  buy(u, replace) {
-    const cost = priceOf(u, this.owned), [i, old] = this.placeFor(u, replace);
-    if (i < 0 || this.coins + this.refundFor(old) < cost || (this.owned[u.id] || 0) >= u.max) return null;
-    if (old) {
-      this.coins += this.refundFor(old);
-      delete this.owned[old];
-      delete this.spent[old];
+  // The backpack with a new piece for `u` in it ({ id: cells }), or null if it can't fit. A free spot is used if there
+  // is one, so nothing moves; otherwise every piece is packed again from scratch (turned if that helps).
+  packWith(u) {
+    const cells = cellsOf(SHAPES[u.shape]);
+    const quick = pack([{ id: u.id, cells }], BACKPACK.w, this.packRows, Object.values(this.pack).flat());
+    if (quick) return { ...this.pack, ...quick };
+    const all = [...Object.keys(this.pack).map(id => ({ id, cells: cellsOf(SHAPES[UPGRADE[id].shape]) })), { id: u.id, cells }];
+    return pack(all, BACKPACK.w, this.packRows);
+  }
+
+  // What buying `u` would do: 'merge' (into the next tier), 'fit' (a new piece), 'swap' (another active item), or why
+  // it can't: 'max', 'room', 'companions'. (Money is checked separately.)
+  buyKind(u) {
+    const have = this.owned[u.id] || 0;
+    if (have >= u.max) return 'max';
+    if (have) return 'merge';
+    if (u.active) return this.P.active ? 'swap' : 'fit';
+    if (u.companion && this.bought.filter(id => UPGRADE[id].companion).length >= MAX_COMPANIONS) return 'companions';
+    return this.packWith(u) ? 'fit' : 'room';
+  }
+
+  // Called by the shop: merges an item you have into its next tier, or fits it into the backpack. A new active item
+  // replaces the old one, which sells back for half. Returns the combos this unlocked (maybe none), or null if it
+  // couldn't be bought.
+  buy(u) {
+    const kind = this.buyKind(u), cost = priceOf(u, this.owned), old = kind === 'swap' ? this.P.active.id : null;
+    if (!['merge', 'fit', 'swap'].includes(kind) || this.coins + this.refundFor(old) < cost) return null;
+    if (old) this.sell(old);
+    if (!u.active && kind === 'fit') this.pack = this.packWith(u);
+    if (kind !== 'merge') {
+      this.bought.push(u.id);
+      this.charge = u.active ? 0 : this.charge; // a new active item starts uncharged
     }
-    if (u.active && this.loadout.active[0] !== u.id) this.charge = 0; // a new active item starts uncharged
-    this.loadout[u.slot][i] = u.id;
     this.coins -= cost;
     this.spent[u.id] = (this.spent[u.id] || 0) + cost;
     this.owned[u.id] = (this.owned[u.id] || 0) + 1;
@@ -158,6 +169,17 @@ class Play extends Phaser.Scene {
     this.updateHud();
     updateItemBtn(); // (shown once the shop closes; also right away if an item is bought mid-wave)
     return unlocked;
+  }
+
+  // Sell something you own for half of what it cost (all its tiers). Its piece leaves the backpack.
+  sell(id) {
+    if (!this.owned[id]) return;
+    this.coins += this.refundFor(id);
+    for (const map of [this.owned, this.spent, this.pack]) delete map[id];
+    this.bought = this.bought.filter(b => b !== id);
+    this.refreshStats();
+    this.updateHud();
+    updateItemBtn();
   }
 
   // ----- Active items -----
@@ -896,6 +918,7 @@ class Play extends Phaser.Scene {
     this.clearShots();
     for (const e of this.enemies.getChildren().slice()) { this.sparks.explode(8, e.x, e.y); e.destroy(); } // its soldiers flee
     this.addScore((b.main ? 5000 : 2500) * (this.era + 1));
+    if (b.main) this.packRows = Math.min(BACKPACK.maxRows, this.packRows + 1); // the backpack gains a row
     this.cameras.main.shake(700, 0.015);
     for (let i = 0; i < 7; i++) {
       this.time.delayedCall(i * 120, () => {

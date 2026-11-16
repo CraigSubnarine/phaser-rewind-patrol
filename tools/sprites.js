@@ -37,6 +37,7 @@ async function exportTemplates() {
       const size = k => { const s = game.textures.get(k).getSourceImage(); return [s.width, s.height]; };
       return {
         sizes: Object.fromEntries(keys.map(k => [k, size(k)])),
+        items: UPGRADES.filter(u => !u.active).map(u => ({ id: u.id, name: u.name, shape: u.shape })),
         eras: ERAS.map(e => ({ id: e.id, name: e.name, army: e.army, shot: e.shot, mid: e.mid.key, midName: e.mid.name.replace('\n', ' '),
           boss: e.boss.key, bossName: e.boss.name.replace('\n', ' '), obstacle: e.obstacle, vehicle: e.vehicle })),
       };
@@ -55,7 +56,7 @@ async function exportTemplates() {
 }
 
 // What every sprite is, grouped the way you'd go about redrawing them.
-function describe({ sizes, eras }) {
+function describe({ sizes, items, eras }) {
   const used = new Set();
   const row = (key, what) => {
     if (!sizes[key] || used.has(key)) return '';
@@ -106,6 +107,8 @@ function describe({ sizes, eras }) {
       ...[0, 1].map(f => row(`rideE-${e.id}-b${f}`, `Enemy rider on the ${e.vehicle}, turned back to shoot at you (being chased). Frame ${f + 1} of 2.`)),
     ]);
   }
+  md += "## Backpack icons\n\nShown on each item's piece in the backpack (shop and pause menu). Items not listed here use one of the game's own sprites as their icon.\n\n"
+    + table(items.map(u => row(`icon-${u.id}`, `${u.name} (a ${u.shape} piece).`)));
   const rest = Object.keys(sizes).filter(k => !used.has(k)).sort();
   if (rest.length) md += '## Everything else\n\n' + table(rest.map(k => row(k, '')));
   return md;

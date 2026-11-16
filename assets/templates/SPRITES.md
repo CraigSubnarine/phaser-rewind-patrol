@@ -340,6 +340,40 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 | `rideE-star-b0.png` | 116 x 60 | Enemy rider on the starfighter, turned back to shoot at you (being chased). Frame 1 of 2. |
 | `rideE-star-b1.png` | 116 x 60 | Enemy rider on the starfighter, turned back to shoot at you (being chased). Frame 2 of 2. |
 
+## Backpack icons
+
+Shown on each item's piece in the backpack (shop and pause menu). Items not listed here use one of the game's own sprites as their icon.
+
+| File | Size | What it is |
+|---|---|---|
+| `icon-rapid.png` | 40 x 28 | Rapid Fire (a tall piece). |
+| `icon-barrel.png` | 40 x 28 | Extra Barrel (a wide piece). |
+| `icon-vest.png` | 32 x 28 | Kevlar Vest (a big piece). |
+| `icon-sneakers.png` | 40 x 20 | Running Shoes (a wide piece). |
+| `icon-detector.png` | 32 x 36 | Metal Detector (a tall piece). |
+| `icon-lucky.png` | 36 x 36 | Lucky Badge (a one piece). |
+| `icon-scutum.png` | 32 x 32 | Scutum (a big piece). |
+| `icon-aquila.png` | 36 x 32 | Aquila Standard (a tall piece). |
+| `icon-plate.png` | 32 x 28 | Plate Armor (a big piece). |
+| `icon-crossbow.png` | 40 x 36 | Crossbow Bolts (a one piece). |
+| `icon-ricochet.png` | 40 x 20 | Ricochet (a one piece). |
+| `icon-map.png` | 40 x 28 | Treasure Map (a one piece). |
+| `icon-sixshooter.png` | 40 x 32 | Six-Shooter (a wide piece). |
+| `icon-deadeye.png` | 40 x 20 | Deadeye (a one piece). |
+| `icon-bushido.png` | 36 x 28 | Bushido (a one piece). |
+| `icon-ninjastep.png` | 32 x 24 | Ninja Step (a wide piece). |
+| `icon-berserk.png` | 40 x 32 | Berserker Rage (a tall piece). |
+| `icon-hearth.png` | 40 x 28 | Hearth Fire (a one piece). |
+| `icon-fire.png` | 32 x 32 | Fire (a one piece). |
+| `icon-hide.png` | 32 x 20 | Mammoth Hide (a big piece). |
+| `icon-smart.png` | 36 x 36 | Smart Rounds (a one piece). |
+| `icon-cyberarm.png` | 40 x 40 | Cyber Arm (a tall piece). |
+| `icon-scraparmor.png` | 32 x 20 | Scrap Armor (a big piece). |
+| `icon-o2tank.png` | 24 x 32 | O2 Tank (a tall piece). |
+| `icon-jetpack.png` | 32 x 32 | Jetpack (a tall piece). |
+| `icon-blaster.png` | 12 x 40 | Blaster Rifle (a long piece). |
+| `icon-deflector.png` | 32 x 24 | Deflector (a wide piece). |
+
 ## Everything else
 
 | File | Size | What it is |

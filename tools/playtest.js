@@ -25,14 +25,19 @@ function installHarness() {
   window.roadKey = () => (scene().road.displayTexture ?? scene().road.texture).key;
   window.__shopBot = () => {
     for (let k = 0; k < 40; k++) {
-      const el = document.querySelector('#shopItems [data-replace]:not(:disabled)') ?? document.querySelector('#shopItems .card:not(:disabled)');
+      const el = document.querySelector('#shopItems .card:not(:disabled)');
       if (!el) break;
       el.click();
     }
     document.querySelector('#shop [data-action=continue]').click();
   };
-  // Empty one loadout slot (as if its items were sold), so a check can buy into it.
-  window.__clearSlot = (s, slot) => { for (const id of s.loadout[slot]) if (id) delete s.owned[id]; s.loadout[slot].fill(null); s.refreshStats(); };
+  // Empty the backpack (as if everything in it were sold), so a check can buy into it.
+  window.__emptyPack = s => {
+    for (const id of Object.keys(s.pack)) { delete s.owned[id]; delete s.spent[id]; }
+    s.pack = {};
+    s.bought = s.bought.filter(id => UPGRADE[id].active);
+    s.refreshStats();
+  };
   // Which mini-boss levels of a seed lead into a bonus level (mirrors Play.rollBonus: one roll per timeline).
   window.bonusPlan = (seed, n) => {
     const r = new Phaser.Math.RandomDataGenerator([`${seed}/bonus`]);
@@ -83,6 +88,7 @@ const visible = (page, id) => page.evaluate(i => !document.getElementById(i).hid
 // Every checkpoint of a 50-wave run, from the run's own route (the seed picks 5 timelines out of 11) and bonus plan:
 // each level's boss, what follows it (the mid-boss: the seed's bonus chase or escape, or straight to the shop; the
 // timeline boss: always straight to the shop), and the time jumps.
+const BACKPACK_ROWS = 3; // the backpack's starting rows (BACKPACK.rows in data.js)
 const checkpointsFor = (route, plan) => route.flatMap((era, i) => [
   [i * 10 + 5, 'boss', era.mid],
   [i * 10 + 5, plan[i] ?? 'noBonus', era.id],
@@ -296,6 +302,7 @@ async function run(browser, name, options) {
     const combo = await page.evaluate(() => {
       const s = scene();
       s.coins = 500;
+      __emptyPack(s);
       const unlocked = [s.buy(UPGRADE.pilum), s.buy(UPGRADE.longbow)].flat().map(c => c.id);
       return { unlocked, longbowEvery: s.P.longbowEvery, pierce: s.P.pierce };
     });
@@ -378,7 +385,7 @@ async function run(browser, name, options) {
     const gear = await page.evaluate(() => {
       const s = scene(), seen = { stars: 0, axe: false, boomerangBack: false, burning: false };
       s.coins = 9999;
-      for (const slot of ['barrel', 'ammo', 'trigger', 'under', 'charm']) __clearSlot(s, slot);
+      __emptyPack(s);
       for (const id of ['sixshooter', 'fire', 'berserk', 'shuriken', 'hearth', 'axes']) s.buy(UPGRADE[id]);
       // Weak early enemies die from the hit that sets them alight, so watch for hits igniting things instead.
       const ignite = s.ignite;
@@ -397,18 +404,20 @@ async function run(browser, name, options) {
         }
       };
       play(300);
-      // A second Underbarrel weapon replaces the axes, which sell back for half of what they cost.
-      const coins = s.coins, spent = s.spent.axes, cost = priceOf(UPGRADE.boomerang, s.owned);
+      // Sell the axes (half their price back), and the boomerang fits where they were.
+      const coins = s.coins, spent = s.spent.axes;
+      s.sell('axes');
+      const refund = s.coins - coins;
       s.buy(UPGRADE.boomerang);
-      seen.swap = { under: s.loadout.under.join(), axesGone: !s.owned.axes, refund: s.coins - (coins - cost), want: Math.floor(spent / 2) };
+      seen.swap = { axesGone: !s.owned.axes && !s.pack.axes, refund, want: Math.floor(spent / 2), boomerang: !!s.pack.boomerang };
       play(300);
       s.ignite = ignite;
       return seen;
     });
     check(`${name}: later timelines' gear works (stars orbit, axes fly, boomerangs come back, fire burns)`,
       gear.stars === 2 && gear.axe && gear.boomerangBack && gear.burning, JSON.stringify(gear));
-    check(`${name}: a second Underbarrel weapon replaces the first, which sells back for half`,
-      gear.swap.under === 'boomerang' && gear.swap.axesGone && gear.swap.refund === gear.swap.want && gear.swap.want > 0, JSON.stringify(gear.swap));
+    check(`${name}: selling the axes gives half back and frees their place for the boomerang`,
+      gear.swap.axesGone && gear.swap.refund === gear.swap.want && gear.swap.want > 0 && gear.swap.boomerang, JSON.stringify(gear.swap));
     for (const id of ['stampede', 'blossom', 'thunder', 'meteor']) {
       const fired = await page.evaluate(i => {
         // The stars and dynamite bought above can clear a stage on their own, so wait for an enemy and fire in one go.
@@ -434,7 +443,7 @@ async function run(browser, name, options) {
     const future = await page.evaluate(() => {
       const s = scene(), made = [], blasts = [], spawn = s.spawnBullet, explode = s.explode;
       s.coins = 99999;
-      for (const slot of ['ammo', 'under', 'charm', 'armour', 'companion']) __clearSlot(s, slot);
+      __emptyPack(s);
       for (const id of ['smart', 'drone', 'molotov', 'scavenger', 'deflector']) s.buy(UPGRADE[id]);
       s.spawnBullet = function (x, y, tex, angle, o) {
         made.push({ tex, home: o.home ?? 0, drone: s.drones.some(d => d.x === x && d.y === y) });
@@ -463,15 +472,19 @@ async function run(browser, name, options) {
       // Molotovs fly straight and only burst when they hit something, so give one a while to find a target.
       for (let i = 0; i < 900 && !blasts.some(x => x.burns); i++) play(1);
       const r = { curved, drones: s.drones.length, droneShot: made.some(m => m.drone), molotov: has('molotov'), fireBlast: blasts.some(x => x.burns) };
-      s.buy(UPGRADE.drill); // replaces the Molotov (Underbarrel)
+      s.sell('molotov'); // swap the Molotov for the drill
+      s.buy(UPGRADE.drill);
       play(200);
       r.drill = has('drillbolt');
-      s.buy(UPGRADE.torpedo); // replaces the drill
+      s.sell('drill'); // ...and the drill for the torpedo
+      s.buy(UPGRADE.torpedo);
       play(300);
       r.torpedo = made.some(m => m.tex === 'torpedo' && m.home > 0);
       r.combos1 = combos(); // Torpedo Bay (torpedo + Smart Rounds), Drone Swarm (drone + Smart Rounds)
-      s.buy(UPGRADE.molotov); // replaces the torpedo...
-      s.buy(UPGRADE.fire); // ...and Fire replaces Smart Rounds (Ammo): Firebomb on, the other two off
+      s.sell('torpedo'); // sell the torpedo and Smart Rounds, buy the Molotov and Fire: Firebomb on, the other two off
+      s.sell('smart');
+      s.buy(UPGRADE.molotov);
+      s.buy(UPGRADE.fire);
       r.combos2 = combos();
       s.spawnBullet = spawn;
       s.explode = explode;
@@ -487,15 +500,12 @@ async function run(browser, name, options) {
       const s = scene(), wc = s.waveCleared;
       let healed = null;
       s.coins = 9999;
-      __clearSlot(s, 'charm');
+      __emptyPack(s);
       for (let i = 0; i < 3; i++) s.buy(UPGRADE.o2tank);
-      s.waveCleared = function () { const before = this.hp; wc.call(this); healed = { before, after: this.hp }; };
+      s.waveCleared = function () { const before = this.hp; wc.call(this); healed = window.__healed = { before, after: this.hp }; };
       s.hp = 1;
-      for (let i = 0; i < 6000 && !healed; i++) {
-        if (app.state === 'shop') document.querySelector('#shop [data-action=continue]').click();
-        s.invulnUntil = Infinity;
-        __step(1);
-      }
+      window.__healed = null;
+      __bot('window.__healed', 120); // the bot aims (Vega's backpack was just emptied, so he wouldn't clear a wave alone)
       s.waveCleared = wc;
       return healed;
     });
@@ -531,45 +541,58 @@ async function run(browser, name, options) {
       check(`${name}: ${id} active item fires and works`, r.ok && r.item === id && r.foes >= 2 && effect, JSON.stringify(r));
     }
 
-    // ----- The loadout: levels up to 3, the grid, a full two-place slot asks which one goes, smoother toughness -----
+    // ----- The backpack: merging to tier III, packing shapes, two companions at most, smoother toughness -----
     const levels = await page.evaluate(() => {
       const s = scene();
       s.coins = 9999;
-      __clearSlot(s, 'trigger');
+      __emptyPack(s);
       const bought = [1, 2, 3, 4].map(() => !!s.buy(UPGRADE.rapid));
+      s.buy(UPGRADE.partner);
+      s.buy(UPGRADE.drone);
+      const third = s.buyKind({ ...UPGRADE.partner, id: 'thirdpal' });
       const tough = [1, 5, 6, 11, 46, 51].map(n => { const st = s.stage; s.stage = n; const v = s.enemyHp(); s.stage = st; return v; });
-      const sameSlot = COMBOS.filter(c => { const [a, b] = c.needs.map(id => UPGRADE[id].slot); return a === b && SLOTS[a].n < 2; }).map(c => c.id);
-      return { bought, level: s.owned.rapid, offered: s.rollOffers().some(u => u.id === 'rapid'), tough, sameSlot };
+      const P = shapes => shapes.map((sh, i) => ({ id: `p${i}`, cells: cellsOf(SHAPES[sh]) }));
+      const packing = [pack(P(Array(12).fill('one')), 4, 3), !pack(P(Array(13).fill('one')), 4, 3), !pack(P(['big', 'big', 'big']), 4, 3),
+        pack(P(['big', 'big', 'wide', 'wide']), 4, 3), pack(P(['long', 'long', 'long', 'long']), 4, 3), pack(P(['ell', 'ell', 'ell', 'ell']), 4, 3)].map(Boolean);
+      return { bought, tier: s.owned.rapid, offered: s.rollOffers().some(u => u.id === 'rapid'), third, tough, packing };
     });
-    check(`${name}: buying again levels an item up to 3, then the shop stops offering it`,
-      JSON.stringify(levels.bought) === '[true,true,true,false]' && levels.level === 3 && !levels.offered, JSON.stringify(levels));
+    check(`${name}: buying again merges an item up to tier III, then the shop stops offering it`,
+      JSON.stringify(levels.bought) === '[true,true,true,false]' && levels.tier === 3 && !levels.offered, JSON.stringify(levels));
+    check(`${name}: pieces pack into the backpack by shape (12 1x1 fit 4x3, 13 don't, 3 2x2 don't, 4 L-shapes do...)`, levels.packing.every(Boolean), JSON.stringify(levels.packing));
+    check(`${name}: at most two companions`, levels.third === 'companions', levels.third);
     check(`${name}: soldier toughness rises 0.25 every level of 5 waves`, JSON.stringify(levels.tough) === '[1,1,1.25,1.5,3.25,3.5]', JSON.stringify(levels.tough));
-    check(`${name}: every combo pairs items from two different slots`, levels.sameSlot.length === 0, levels.sameSlot.join());
-    const asked = await page.evaluate(() => {
+    const packUi = await page.evaluate(() => {
       const s = scene();
       s.coins = 9999;
-      __clearSlot(s, 'charm');
-      s.buy(UPGRADE.hearth);
-      s.buy(UPGRADE.map);
+      __emptyPack(s);
+      s.packRows = 3;
+      s.buy(UPGRADE.vest);
+      s.buy(UPGRADE.cannon); // two 2x2 pieces: 8 of the 12 cells, leaving a 1x4 strip
       openShop(s);
-      app.shop.offers = [UPGRADE.detector, UPGRADE.rapid, UPGRADE.lucky, UPGRADE.vest];
+      app.shop.offers = [UPGRADE.longbow, UPGRADE.scutum, UPGRADE.vest, UPGRADE.lucky];
       renderShop();
-      document.querySelector('#shopItems [data-buy="0"]').click(); // a third charm
-      return { grid: document.querySelectorAll('#shopLoadout .slot').length, choices: [...document.querySelectorAll('#shopItems [data-replace]')].map(b => b.dataset.replace).join() };
+      const card = i => document.querySelector(`#shopItems [data-buy="${i}"]`);
+      card(0).click(); // the 1x3 Longbow goes in the strip, turned on its side; a 2x2 Scutum can't fit any more
+      const r = { cells: document.querySelectorAll('#shopLoadout .cell').length, pieces: document.querySelectorAll('#shopLoadout .piece').length,
+        scutum: { off: card(1).disabled, says: card(1).querySelector('.combo')?.textContent }, vest: card(2).querySelector('.combo')?.textContent };
+      document.querySelector('#shopLoadout [data-piece="cannon"]').click();
+      r.sellText = document.getElementById('sellBtn').textContent;
+      return r;
     });
-    await shot('4e-loadout-chooser');
-    const chosen = await page.evaluate(() => {
-      const s = scene();
-      document.querySelector('#shopItems [data-replace="map"]').click();
-      const r = { charm: s.loadout.charm.join(), note: document.getElementById('shopNote').textContent };
+    await shot('4e-backpack');
+    const sold = await page.evaluate(() => {
+      const s = scene(), coins = s.coins;
+      document.getElementById('sellBtn').click();
+      const r = { refund: s.coins - coins, cannonGone: !s.pack.cannon, scutumNow: !document.querySelector('#shopItems [data-buy="1"]').disabled };
       s.sys.resume(); // back to the wave (closing the shop the normal way would start the next stage)
       app.state = 'playing';
       showScreen(null);
       document.getElementById('pauseBtn').hidden = false;
       return r;
     });
-    check(`${name}: the shop shows the loadout grid, and a full Charm slot asks which one to replace`,
-      asked.grid === 12 && asked.choices === 'hearth,map' && chosen.charm === 'hearth,detector' && /Sold your Treasure Map/.test(chosen.note), JSON.stringify({ asked, chosen }));
+    check(`${name}: the backpack: pieces fill it, one that won't fit says "no room", owned items merge, tap a piece to sell it`,
+      packUi.cells === 12 && packUi.pieces === 3 && packUi.scutum.off && /No room/.test(packUi.scutum.says) && /Merges into tier II/.test(packUi.vest)
+        && /Sell Ship's Cannon I for \$9/.test(packUi.sellText) && sold.refund === 9 && sold.cannonGone && sold.scutumNow, JSON.stringify({ packUi, sold }));
 
     // Same seed: same first shop and same 5 timelines. (offers1/route1 came from seed1 before buying anything.)
     const again = await firstShop(page, seed1);
@@ -739,10 +762,11 @@ async function run(browser, name, options) {
         const next = await page.evaluate(n => {
           __bot(`scene().stage === ${n} && /WAVES ${n}-/.test(scene().lastBanner)`, 120); // the new level's card
           __step(30); // let the new road and the card fade in before the screenshot
-          return { stage: scene().stage, card: scene().lastBanner, road: roadKey(), parts: scene().parts };
+          return { stage: scene().stage, card: scene().lastBanner, road: roadKey(), parts: scene().parts, rows: scene().packRows };
         }, stage);
         const parts = (stage - 1) / 10;
-        check(`${name}: wave ${stage} jumps to ${key.name} with ${parts} part(s)`, next.card.includes(key.name) && next.road === key.road && next.parts === parts, JSON.stringify(next));
+        check(`${name}: wave ${stage} jumps to ${key.name} with ${parts} part(s), and the backpack has grown a row per boss`,
+          next.card.includes(key.name) && next.road === key.road && next.parts === parts && next.rows === BACKPACK_ROWS + parts, JSON.stringify(next));
         await shot(`6-stage-${stage}-card`);
       } else {
         // Look for the boss arriving: by late stages the bot's build can kill it the moment it becomes hittable.

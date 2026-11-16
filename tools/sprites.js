@@ -100,11 +100,9 @@ function describe({ sizes, items, eras }) {
       row(`road-${e.id}`, 'Road tile, seen from above. Repeats top to bottom: the top and bottom edges must join.'),
       row(`hills-${e.id}`, 'Vehicle stages: distant scenery with a see-through sky. Repeats sideways: left and right edges must join.'),
       row(`ground-${e.id}`, 'Vehicle stages: the ground the vehicles race on. Repeats sideways: left and right edges must join.'),
-      row(e.obstacle, 'Vehicle stages: obstacle.'),
-      ...[0, 1].map(f => row(`ride-${e.id}-f${f}`, `Vega on the ${e.vehicle}, facing right and shooting ahead. Animation frame ${f + 1} of 2.`)),
-      ...[0, 1].map(f => row(`ride-${e.id}-b${f}`, `Vega on the ${e.vehicle}, facing right but turned to shoot backwards. Frame ${f + 1} of 2.`)),
-      ...[0, 1].map(f => row(`rideE-${e.id}-f${f}`, `Enemy rider on the ${e.vehicle}, facing right (chasing you). Frame ${f + 1} of 2.`)),
-      ...[0, 1].map(f => row(`rideE-${e.id}-b${f}`, `Enemy rider on the ${e.vehicle}, turned back to shoot at you (being chased). Frame ${f + 1} of 2.`)),
+      row(e.obstacle, 'Bonus chase: obstacle.'),
+      ...[0, 1].map(f => row(`ride-${e.id}${f}`, `Bonus chase: Vega on the ${e.vehicle}, facing right and shooting ahead. Animation frame ${f + 1} of 2.`)),
+      ...[0, 1].map(f => row(`rideE-${e.id}${f}`, `Bonus chase: an enemy rider on the ${e.vehicle}, facing right but turned back to shoot at Vega. Frame ${f + 1} of 2.`)),
     ]);
   }
   md += "## Backpack icons\n\nShown on each item's piece in the backpack (shop and pause menu). Items not listed here use one of the game's own sprites as their icon.\n\n"

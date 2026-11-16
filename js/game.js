@@ -21,7 +21,7 @@ class Play extends Phaser.Scene {
     makeSides(this);
     if (!this.anims.exists('walk')) {
       this.anims.create({ key: 'walk', frames: ['vega1', 'vega0', 'vega2', 'vega0'].map(key => ({ key })), frameRate: 10, repeat: -1 });
-      for (const era of ERAS) for (const k of [`ride-${era.id}-f`, `ride-${era.id}-b`, `rideE-${era.id}-f`, `rideE-${era.id}-b`]) {
+      for (const era of ERAS) for (const k of [`ride-${era.id}`, `rideE-${era.id}`]) {
         this.anims.create({ key: k, frames: [{ key: `${k}0` }, { key: `${k}1` }], frameRate: 6, repeat: -1 });
       }
       for (const era of ERAS) for (const { key } of [era.mid, era.boss]) {
@@ -90,7 +90,7 @@ class Play extends Phaser.Scene {
       nextFire: 0, volleys: 0, nextCannon: 0, nextEnemyShot: 0, invulnUntil: 0, shieldNextAt: 0,
       waveActive: false, spawnsLeft: 0, nextCharge: 0, boss: null, vacuum: false, stage: 0, era: 0,
       target: { x: this.player.x, y: this.player.y },
-      charge: 0, frozenUntil: 0, testudoUntil: 0, streamTimers: [], sideMode: null, nextObstacle: 0,
+      charge: 0, frozenUntil: 0, testudoUntil: 0, streamTimers: [], nextObstacle: 0,
       nextAxe: 0, nextBoomerang: 0, orbitAngle: 0, chargeLockUntil: 0, endless: false,
       nextDrone: 0, nextMolotov: 0, nextDrill: 0, nextTorpedo: 0, nitroUntil: 0, // future gear
       bonus: null, nextRider: 0, hudSecs: 0, // bonus levels
@@ -456,7 +456,7 @@ class Play extends Phaser.Scene {
   // ----- Run flow -----
   // Waves come in levels of 5, played back to back: a level card at the start, a quick "WAVE n" call between waves,
   // and the 5th wave is a boss. After every level comes the shop; a mini-boss level sometimes leads into a bonus
-  // vehicle level first (a chase or an escape). (`this.stage` is the wave number, 1-50 and on into endless.)
+  // vehicle level first (a chase). (`this.stage` is the wave number, 1-50 and on into endless.)
   // Timeline number n of this run (0-based): one of the 5 the seed picked, then in endless a seeded pick every
   // 10 stages, never the same one twice in a row.
   eraFor(n) {
@@ -500,12 +500,11 @@ class Play extends Phaser.Scene {
     return !!this.bonus;
   }
 
-  // Swap between walking the road (top-down) and a vehicle stage (side view, chasing or being chased).
-  setView(view, mode = null) {
-    if (view === this.view && mode === this.sideMode) return;
+  // Swap between walking the road (top-down) and a bonus chase (side view, racing right).
+  setView(view) {
+    if (view === this.view) return;
     const era = this.E, side = view === 'side';
     this.view = view;
-    this.sideMode = mode;
     this.cameras.main.fadeIn(350, 0, 0, 0);
     this.bullets.clear(true, true); // shots from the last view would fly through the new scenery
     this.clearShots();
@@ -515,10 +514,10 @@ class Play extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(side ? era.sky : era.bg);
     for (const pt of this.partners) pt.setVisible(!side); // in a vehicle their shots come from Vega's ride instead
     if (side) {
-      this.aim = mode === 'chase' ? 0 : Math.PI;
-      this.player.play(`ride-${era.id}-${mode === 'chase' ? 'f' : 'b'}`);
+      this.aim = 0; // shooting ahead at the riders
+      this.player.play(`ride-${era.id}`);
       this.player.body.setSize(this.player.width * 0.55, this.player.height * 0.5, true);
-      this.placePlayer(mode === 'chase' ? 140 : W - 140, (BAND_TOP + H) / 2);
+      this.placePlayer(140, (BAND_TOP + H) / 2);
     } else {
       this.aim = -Math.PI / 2;
       this.player.play('walk');
@@ -564,16 +563,14 @@ class Play extends Phaser.Scene {
       for (const p of this.pickups.getChildren().slice()) this.collect(p);
       this.vacuum = false;
       this.clearShots();
-      const mode = this.rollBonus();
-      if (mode) this.startBonus(mode);
+      if (this.rollBonus()) this.startBonus();
       else this.afterLevel();
     });
   }
 
-  // Only a mini-boss level can lead into a bonus level, and only sometimes. Seeded: same seed, same bonus levels.
+  // Only a mini-boss level can lead into a bonus chase, and only sometimes. Seeded: same seed, same bonus levels.
   rollBonus() {
-    if (this.stage % STAGES_PER_ERA === 0) return null;
-    return this.bonusRng.frac() < BONUS_CHANCE ? this.bonusRng.pick(['chase', 'escape']) : null;
+    return this.stage % STAGES_PER_ERA !== 0 && this.bonusRng.frac() < BONUS_CHANCE;
   }
 
   // The shop, or after wave 50 the go-home-or-endless choice.
@@ -586,13 +583,13 @@ class Play extends Phaser.Scene {
     this.startStage(this.stage + 1);
   }
 
-  // Bonus level: a longer vehicle stage between levels, seen from the side. Riders keep coming for BONUS_TIME and
-  // each one taken down pays out at the end. Hits can't cost HP here, only coins.
-  startBonus(mode) {
-    this.bonus = { mode, caught: 0, endsAt: Infinity };
+  // Bonus level: a chase on the timeline's ride, seen from the side. Riders keep coming for BONUS_TIME and each one
+  // taken down pays BONUS_PAY at the end. Hits can't cost HP here, only coins.
+  startBonus() {
+    this.bonus = { caught: 0, endsAt: Infinity };
     this.updateHud();
-    this.setView('side', mode);
-    this.banner(`BONUS LEVEL\n\n${mode === 'chase' ? 'CHASE THEM DOWN!\nSHOOT AHEAD' : 'ESCAPE!\nSHOOT BEHIND'}`, 2200, 22);
+    this.setView('side');
+    this.banner('BONUS LEVEL\n\nCHASE THEM DOWN!\nSHOOT AHEAD', 2200, 22);
     this.time.delayedCall(2400, () => {
       this.bonus.endsAt = this.t + BONUS_TIME;
       this.nextRider = this.t;
@@ -654,15 +651,15 @@ class Play extends Phaser.Scene {
     }));
   }
 
-  // One rider in a bonus level: from ahead in a chase (they look back to shoot at you) or from behind in an escape.
-  // They weave about and now and then try to ram you.
-  spawnRider(mode) {
-    const chase = mode === 'chase', y = Phaser.Math.Between(BAND_TOP + 20, H - 50), x0 = chase ? W + 70 : -70;
+  // One rider in a bonus chase: they come in ahead of Vega and look back to shoot at him, weave about, and now and
+  // then try to ram him.
+  spawnRider() {
+    const y = Phaser.Math.Between(BAND_TOP + 20, H - 50), x0 = W + 70;
     const e = this.spawnEnemy(x0, y, 'G', {
-      mode: 'ride', fromX: x0, homeX: chase ? Phaser.Math.Between(330, W - 60) : Phaser.Math.Between(60, 270), baseY: y, phase: Math.random() * 6, enter: 0,
+      mode: 'ride', fromX: x0, homeX: Phaser.Math.Between(330, W - 60), baseY: y, phase: Math.random() * 6, enter: 0,
     });
     e.hp = e.maxHp = this.enemyHp() + 1; // riders are tougher than foot soldiers
-    e.play(`rideE-${this.E.id}-${chase ? 'b' : 'f'}`);
+    e.play(`rideE-${this.E.id}`);
     e.body.setSize(e.width * 0.6, e.height * 0.55, true);
     this.tweens.add({ targets: e, enter: 1, duration: 1400, ease: 'Sine.easeOut' });
   }
@@ -1085,12 +1082,11 @@ class Play extends Phaser.Scene {
     }
   }
 
-  // Where Vega may go: the lower half on foot; in a vehicle, the ground band, on his half of it
-  // (left when chasing, right when being chased, so there's room to see what's coming).
+  // Where Vega may go: the lower half on foot; in a bonus chase, the left half of the ground band (the riders are
+  // ahead of him, on the right).
   setTarget(x, y) {
     if (this.view === 'side') {
-      const chase = this.sideMode === 'chase';
-      this.target.x = Phaser.Math.Clamp(x, chase ? 60 : W * 0.5, chase ? W * 0.5 : W - 60);
+      this.target.x = Phaser.Math.Clamp(x, 60, W * 0.5);
       this.target.y = Phaser.Math.Clamp(y, BAND_TOP, H - 34);
     } else {
       this.target.x = Phaser.Math.Clamp(x, 35, W - 35);
@@ -1242,7 +1238,7 @@ class Play extends Phaser.Scene {
     const b = this.bonus;
     if (b && this.t < b.endsAt && this.t > this.nextRider && this.enemies.countActive() < 6) {
       this.nextRider = this.t + 1300 / ((1 + 0.2 * this.era) * this.diff.fire);
-      this.spawnRider(b.mode);
+      this.spawnRider();
     }
     if (b && this.t >= b.endsAt) this.endBonus();
     else if (b && Math.ceil((b.endsAt - this.t) / 1000) !== this.hudSecs) { this.hudSecs = Math.ceil((b.endsAt - this.t) / 1000); this.updateHud(); }

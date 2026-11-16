@@ -41,7 +41,7 @@ function installHarness() {
   // Which mini-boss levels of a seed lead into a bonus level (mirrors Play.rollBonus: one roll per timeline).
   window.bonusPlan = (seed, n) => {
     const r = new Phaser.Math.RandomDataGenerator([`${seed}/bonus`]);
-    return Array.from({ length: n }, () => (r.frac() < BONUS_CHANCE ? r.pick(['chase', 'escape']) : null));
+    return Array.from({ length: n }, () => r.frac() < BONUS_CHANCE);
   };
   // Every soldier spawned (wave, type, and whether its health is the run's toughness x its type's multiplier).
   window.__spawned = [];
@@ -61,7 +61,6 @@ function installHarness() {
       const s = scene();
       s.invulnUntil = Infinity;
       if (s.bonus) {
-        window.__bonusSeen = s.bonus.mode;
         // Bonus levels last 45 s; after 6 s of one we've seen it work, so end it early to keep the run quick.
         if (s.bonus.endsAt !== Infinity && s.t > s.bonus.endsAt - BONUS_TIME + 6000) s.bonus.endsAt = s.t;
       }
@@ -86,12 +85,12 @@ function installHarness() {
 const visible = (page, id) => page.evaluate(i => !document.getElementById(i).hidden && !document.getElementById('ui').hidden, id);
 
 // Every checkpoint of a 50-wave run, from the run's own route (the seed picks 5 timelines out of 11) and bonus plan:
-// each level's boss, what follows it (the mid-boss: the seed's bonus chase or escape, or straight to the shop; the
+// each level's boss, what follows it (the mid-boss: the seed's bonus chase, or straight to the shop; the
 // timeline boss: always straight to the shop), and the time jumps.
 const BACKPACK_ROWS = 3; // the backpack's starting rows (BACKPACK.rows in data.js)
 const checkpointsFor = (route, plan) => route.flatMap((era, i) => [
   [i * 10 + 5, 'boss', era.mid],
-  [i * 10 + 5, plan[i] ?? 'noBonus', era.id],
+  [i * 10 + 5, plan[i] ? 'chase' : 'noBonus', era.id],
   ...(i === 0 ? [[6, 'top']] : []),
   [i * 10 + 10, 'boss', era.boss],
   [i * 10 + 10, 'noBonus', era.id],
@@ -131,7 +130,6 @@ async function run(browser, name, options) {
   await page.waitForFunction(() => typeof scene === 'function' && !!scene(), null, { timeout: 15000 });
   await page.evaluate(installHarness);
   const seed1 = await page.evaluate(() => findSeed('TEST', 1, p => p[0])); // its first mini-boss leads into a bonus level
-  const mode1 = await page.evaluate(sd => bonusPlan(sd, 1)[0], seed1);
   check(`${name}: main menu on load`, await visible(page, 'main'));
   await shot('1-menu');
 
@@ -254,12 +252,12 @@ async function run(browser, name, options) {
     const coins = s.coins;
     s.invulnUntil = 0;
     s.hitPlayer(); // bonus levels: a hit costs coins, never HP
-    return { stage: s.stage, mode: s.bonus.mode, view: s.view, hpSame: s.hp === hp, lostCoins: coins - s.coins, hud: s.hud.text.includes('BONUS') };
+    return { stage: s.stage, view: s.view, hpSame: s.hp === hp, lostCoins: coins - s.coins, hud: s.hud.text.includes('BONUS') };
   });
-  check(`${name}: after the wave-5 mid-boss, seed ${seed1} rolls a bonus ${mode1}, where hits cost coins not HP`,
-    bonus.stage === 5 && bonus.mode === mode1 && bonus.view === 'side' && bonus.hpSame && bonus.lostCoins > 0 && bonus.hud, JSON.stringify(bonus));
+  check(`${name}: after the wave-5 mid-boss, seed ${seed1} rolls a bonus chase, where hits cost coins not HP`,
+    bonus.stage === 5 && bonus.view === 'side' && bonus.hpSame && bonus.lostCoins > 0 && bonus.hud, JSON.stringify(bonus));
   await page.evaluate(() => __step(60));
-  await shot(`3b-bonus-${mode1}`);
+  await shot('3b-bonus-chase');
   const coinsBefore = await page.evaluate(() => { __bot(`app.state === 'shop'`, 120); return scene().coins; });
   check(`${name}: the bonus level ends with a payout, then the shop`, (await visible(page, 'shop')) && coinsBefore > 0 && /BONUS COMPLETE/.test(await page.evaluate(() => scene().lastBanner)), `$${Math.floor(coinsBefore)}`);
   const spawned = await page.evaluate(() => {
@@ -351,7 +349,7 @@ async function run(browser, name, options) {
       s.stage = 5; // pretend it's a boss wave
       const refused = s.useActive() === false;
       s.stage = stage;
-      s.bonus = { mode: 'chase', caught: 0, endsAt: Infinity }; // ...and a bonus level
+      s.bonus = { caught: 0, endsAt: Infinity }; // ...and a bonus level
       const refusedBonus = s.useActive() === false;
       s.bonus = null;
       return { swapped, refused, refusedBonus };
@@ -697,9 +695,9 @@ async function run(browser, name, options) {
       });
     }
 
-    // ----- Every timeline: its road and army, then its bonus-level ride, riders and obstacles (chase and escape in turn) -----
+    // ----- Every timeline: its road and army, then its bonus chase: its ride, riders, obstacles and scenery -----
     const eraIds = await page.evaluate(() => ERAS.map(e => e.id));
-    for (const [i, id] of eraIds.entries()) {
+    for (const id of eraIds) {
       const top = await page.evaluate(id => {
         const s = scene(), E = s.E = ERA[id];
         s.road.setTexture(E.road);
@@ -710,22 +708,21 @@ async function run(browser, name, options) {
       }, id);
       check(`${name}: ${id}: its road and all 4 soldier types`, top.road && top.army, JSON.stringify(top));
       await shot(`11-${id}-road`);
-      const mode = i % 2 ? 'escape' : 'chase';
-      const side = await page.evaluate(([id, mode]) => {
-        const s = scene(), E = ERA[id], tex = o => (o.displayTexture ?? o.texture).key;
+      const side = await page.evaluate(id => {
+        const s = scene(), tex = o => (o.displayTexture ?? o.texture).key;
         s.enemies.clear(true, true);
         s.clearShots();
-        s.bonus = { mode, caught: 0, endsAt: s.t + 1e6 };
-        s.setView('side', mode);
+        s.bonus = { caught: 0, endsAt: s.t + 1e6 };
+        s.setView('side');
         Object.assign(s, { nextRider: s.t, nextDive: s.t + 1e6, nextObstacle: s.t });
         for (let f = 0; f < 90; f++) { s.invulnUntil = Infinity; s.nextFire = s.t + 1e6; __step(1); }
         return {
           anim: s.player.anims.currentAnim?.key, rider: s.enemies.getChildren()[0]?.anims.currentAnim?.key,
           obstacle: s.obstacles.getChildren()[0]?.texture.key, scenery: tex(s.hills) === `hills-${id}` && tex(s.ground) === `ground-${id}`,
         };
-      }, [id, mode]);
-      const want = { anim: `ride-${id}-${mode === 'chase' ? 'f' : 'b'}`, rider: `rideE-${id}-${mode === 'chase' ? 'b' : 'f'}`, obstacle: await page.evaluate(id => ERA[id].obstacle, id), scenery: true };
-      check(`${name}: ${id}: bonus ${mode} on its ${await page.evaluate(id => ERA[id].vehicle, id)}, with riders, obstacles and scenery`, JSON.stringify(side) === JSON.stringify(want), JSON.stringify(side));
+      }, id);
+      const want = { anim: `ride-${id}`, rider: `rideE-${id}`, obstacle: await page.evaluate(id => ERA[id].obstacle, id), scenery: true };
+      check(`${name}: ${id}: bonus chase on its ${await page.evaluate(id => ERA[id].vehicle, id)}, with riders, obstacles and scenery`, JSON.stringify(side) === JSON.stringify(want), JSON.stringify(side));
       await shot(`11-${id}-bonus`);
       await page.evaluate(() => {
         const s = scene();
@@ -737,42 +734,42 @@ async function run(browser, name, options) {
       });
     }
 
-    // A full route with at least two future timelines (one with a bonus level), whose bonus plan has a bonus after the
-    // first mini-boss, both a chase and an escape, and a mini-boss with no bonus level.
+    // A full route with at least two future timelines (one with a bonus chase), whose bonus plan has a chase after the
+    // first mini-boss and a mini-boss with no bonus level.
     const routeSeed = await page.evaluate(() => {
       const future = ['chrome', 'waste', 'mars', 'star'];
       for (let i = 1; ; i++) {
         const sd = `ROUTE${i}`, p = bonusPlan(sd, TIMELINES);
         const route = new Phaser.Math.RandomDataGenerator([`${sd}/route`]).shuffle(ERAS.slice()).slice(0, TIMELINES);
-        if (p[0] && p.includes('chase') && p.includes('escape') && p.includes(null)
+        if (p[0] && p.includes(false)
           && route.filter(e => future.includes(e.id)).length >= 2 && route.some((e, k) => future.includes(e.id) && p[k])) return sd;
       }
     });
     const plan = await page.evaluate(sd => bonusPlan(sd, TIMELINES), routeSeed);
-    console.log(`     route seed ${routeSeed}, bonus levels: ${plan.map(m => m ?? '-').join(' ')}`);
+    console.log(`     route seed ${routeSeed}, bonus chases: ${plan.map(m => (m ? 'chase' : '-')).join(' ')}`);
     await startRun(page, routeSeed); // a fresh run from wave 1
 
     const route = await page.evaluate(() => scene().route.map(e => ({ id: e.id, name: e.name.toUpperCase(), road: e.road, mid: e.mid.key, boss: e.boss.key })));
     for (const [stage, kind, key] of checkpointsFor(route, plan)) {
-      if (kind === 'chase' || kind === 'escape') {
-        const v = await page.evaluate(([n, mode]) => {
+      if (kind === 'chase') {
+        const v = await page.evaluate(n => {
           // the bot's late-game build can kill each rider as it appears, so wait for the bonus level, not for riders
-          __bot(`scene().stage === ${n} && scene().bonus?.mode === '${mode}' && scene().bonus.endsAt !== Infinity`, 200);
+          __bot(`scene().stage === ${n} && scene().bonus && scene().bonus.endsAt !== Infinity`, 200);
           const s = scene();
           __step(30);
           const vx = s.bullets.getChildren().reduce((sum, b) => sum + b.body.velocity.x, 0);
-          return { stage: s.stage, bonus: s.bonus?.mode, view: s.view, anim: s.player.anims.currentAnim?.key, ground: s.ground.visible, road: s.road.visible, shots: Math.sign(vx) };
-        }, [stage, kind]);
-        const want = { stage, bonus: kind, view: 'side', anim: `ride-${key}-${kind === 'chase' ? 'f' : 'b'}`, ground: true, road: false, shots: kind === 'chase' ? 1 : -1 };
-        check(`${name}: after wave ${stage}, a bonus ${kind} in ${key}`, JSON.stringify(v) === JSON.stringify(want), JSON.stringify(v));
-        await shot(`5-wave-${stage}-bonus-${kind}-${key}`);
+          return { stage: s.stage, bonus: !!s.bonus, view: s.view, anim: s.player.anims.currentAnim?.key, ground: s.ground.visible, road: s.road.visible, shots: Math.sign(vx) };
+        }, stage);
+        const want = { stage, bonus: true, view: 'side', anim: `ride-${key}`, ground: true, road: false, shots: 1 };
+        check(`${name}: after wave ${stage}, a bonus chase in ${key}`, JSON.stringify(v) === JSON.stringify(want), JSON.stringify(v));
+        await shot(`5-wave-${stage}-bonus-chase-${key}`);
       } else if (kind === 'noBonus') {
         const v = await page.evaluate(n => {
           __bot(`scene().stage === ${n} && (scene().bonus || app.state !== 'playing')`, 200);
-          return { stage: scene().stage, bonus: scene().bonus?.mode ?? null, state: app.state };
+          return { stage: scene().stage, bonus: !!scene().bonus, state: app.state };
         }, stage);
         const want = stage === 50 ? 'choice' : 'shop';
-        check(`${name}: after wave ${stage}'s boss, no bonus level: straight to the ${want}`, v.stage === stage && v.bonus === null && v.state === want, JSON.stringify(v));
+        check(`${name}: after wave ${stage}'s boss, no bonus level: straight to the ${want}`, v.stage === stage && !v.bonus && v.state === want, JSON.stringify(v));
       } else if (kind === 'top') {
         const v = await page.evaluate(n => {
           __bot(`scene().stage === ${n} && app.state === 'playing'`, 200);

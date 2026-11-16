@@ -55,15 +55,11 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 | `road-rome.png` | 600 x 256 | Road tile, seen from above. Repeats top to bottom: the top and bottom edges must join. |
 | `hills-rome.png` | 512 x 220 | Vehicle stages: distant scenery with a see-through sky. Repeats sideways: left and right edges must join. |
 | `ground-rome.png` | 256 x 470 | Vehicle stages: the ground the vehicles race on. Repeats sideways: left and right edges must join. |
-| `rock.png` | 40 x 24 | Vehicle stages: obstacle. |
-| `ride-rome-f0.png` | 112 x 80 | Vega on the chariot, facing right and shooting ahead. Animation frame 1 of 2. |
-| `ride-rome-f1.png` | 112 x 80 | Vega on the chariot, facing right and shooting ahead. Animation frame 2 of 2. |
-| `ride-rome-b0.png` | 112 x 80 | Vega on the chariot, facing right but turned to shoot backwards. Frame 1 of 2. |
-| `ride-rome-b1.png` | 112 x 80 | Vega on the chariot, facing right but turned to shoot backwards. Frame 2 of 2. |
-| `rideE-rome-f0.png` | 112 x 80 | Enemy rider on the chariot, facing right (chasing you). Frame 1 of 2. |
-| `rideE-rome-f1.png` | 112 x 80 | Enemy rider on the chariot, facing right (chasing you). Frame 2 of 2. |
-| `rideE-rome-b0.png` | 112 x 80 | Enemy rider on the chariot, turned back to shoot at you (being chased). Frame 1 of 2. |
-| `rideE-rome-b1.png` | 112 x 80 | Enemy rider on the chariot, turned back to shoot at you (being chased). Frame 2 of 2. |
+| `rock.png` | 40 x 24 | Bonus chase: obstacle. |
+| `ride-rome0.png` | 112 x 80 | Bonus chase: Vega on the chariot, facing right and shooting ahead. Animation frame 1 of 2. |
+| `ride-rome1.png` | 112 x 80 | Bonus chase: Vega on the chariot, facing right and shooting ahead. Animation frame 2 of 2. |
+| `rideE-rome0.png` | 112 x 80 | Bonus chase: an enemy rider on the chariot, facing right but turned back to shoot at Vega. Frame 1 of 2. |
+| `rideE-rome1.png` | 112 x 80 | Bonus chase: an enemy rider on the chariot, facing right but turned back to shoot at Vega. Frame 2 of 2. |
 
 ## England
 
@@ -83,14 +79,10 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 | `road-england.png` | 600 x 256 | Road tile, seen from above. Repeats top to bottom: the top and bottom edges must join. |
 | `hills-england.png` | 512 x 220 | Vehicle stages: distant scenery with a see-through sky. Repeats sideways: left and right edges must join. |
 | `ground-england.png` | 256 x 470 | Vehicle stages: the ground the vehicles race on. Repeats sideways: left and right edges must join. |
-| `ride-england-f0.png` | 80 x 80 | Vega on the horse, facing right and shooting ahead. Animation frame 1 of 2. |
-| `ride-england-f1.png` | 80 x 80 | Vega on the horse, facing right and shooting ahead. Animation frame 2 of 2. |
-| `ride-england-b0.png` | 80 x 80 | Vega on the horse, facing right but turned to shoot backwards. Frame 1 of 2. |
-| `ride-england-b1.png` | 80 x 80 | Vega on the horse, facing right but turned to shoot backwards. Frame 2 of 2. |
-| `rideE-england-f0.png` | 80 x 80 | Enemy rider on the horse, facing right (chasing you). Frame 1 of 2. |
-| `rideE-england-f1.png` | 80 x 80 | Enemy rider on the horse, facing right (chasing you). Frame 2 of 2. |
-| `rideE-england-b0.png` | 80 x 80 | Enemy rider on the horse, turned back to shoot at you (being chased). Frame 1 of 2. |
-| `rideE-england-b1.png` | 80 x 80 | Enemy rider on the horse, turned back to shoot at you (being chased). Frame 2 of 2. |
+| `ride-england0.png` | 80 x 80 | Bonus chase: Vega on the horse, facing right and shooting ahead. Animation frame 1 of 2. |
+| `ride-england1.png` | 80 x 80 | Bonus chase: Vega on the horse, facing right and shooting ahead. Animation frame 2 of 2. |
+| `rideE-england0.png` | 80 x 80 | Bonus chase: an enemy rider on the horse, facing right but turned back to shoot at Vega. Frame 1 of 2. |
+| `rideE-england1.png` | 80 x 80 | Bonus chase: an enemy rider on the horse, facing right but turned back to shoot at Vega. Frame 2 of 2. |
 
 ## The Caribbean
 
@@ -110,15 +102,11 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 | `road-caribbean.png` | 600 x 256 | Road tile, seen from above. Repeats top to bottom: the top and bottom edges must join. |
 | `hills-caribbean.png` | 512 x 220 | Vehicle stages: distant scenery with a see-through sky. Repeats sideways: left and right edges must join. |
 | `ground-caribbean.png` | 256 x 470 | Vehicle stages: the ground the vehicles race on. Repeats sideways: left and right edges must join. |
-| `barrel.png` | 32 x 32 | Vehicle stages: obstacle. |
-| `ride-caribbean-f0.png` | 96 x 60 | Vega on the boat, facing right and shooting ahead. Animation frame 1 of 2. |
-| `ride-caribbean-f1.png` | 96 x 60 | Vega on the boat, facing right and shooting ahead. Animation frame 2 of 2. |
-| `ride-caribbean-b0.png` | 96 x 60 | Vega on the boat, facing right but turned to shoot backwards. Frame 1 of 2. |
-| `ride-caribbean-b1.png` | 96 x 60 | Vega on the boat, facing right but turned to shoot backwards. Frame 2 of 2. |
-| `rideE-caribbean-f0.png` | 96 x 60 | Enemy rider on the boat, facing right (chasing you). Frame 1 of 2. |
-| `rideE-caribbean-f1.png` | 96 x 60 | Enemy rider on the boat, facing right (chasing you). Frame 2 of 2. |
-| `rideE-caribbean-b0.png` | 96 x 60 | Enemy rider on the boat, turned back to shoot at you (being chased). Frame 1 of 2. |
-| `rideE-caribbean-b1.png` | 96 x 60 | Enemy rider on the boat, turned back to shoot at you (being chased). Frame 2 of 2. |
+| `barrel.png` | 32 x 32 | Bonus chase: obstacle. |
+| `ride-caribbean0.png` | 96 x 60 | Bonus chase: Vega on the boat, facing right and shooting ahead. Animation frame 1 of 2. |
+| `ride-caribbean1.png` | 96 x 60 | Bonus chase: Vega on the boat, facing right and shooting ahead. Animation frame 2 of 2. |
+| `rideE-caribbean0.png` | 96 x 60 | Bonus chase: an enemy rider on the boat, facing right but turned back to shoot at Vega. Frame 1 of 2. |
+| `rideE-caribbean1.png` | 96 x 60 | Bonus chase: an enemy rider on the boat, facing right but turned back to shoot at Vega. Frame 2 of 2. |
 
 ## The Wild West
 
@@ -138,15 +126,11 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 | `road-west.png` | 600 x 256 | Road tile, seen from above. Repeats top to bottom: the top and bottom edges must join. |
 | `hills-west.png` | 512 x 220 | Vehicle stages: distant scenery with a see-through sky. Repeats sideways: left and right edges must join. |
 | `ground-west.png` | 256 x 470 | Vehicle stages: the ground the vehicles race on. Repeats sideways: left and right edges must join. |
-| `cactus.png` | 32 x 40 | Vehicle stages: obstacle. |
-| `ride-west-f0.png` | 80 x 80 | Vega on the horse, facing right and shooting ahead. Animation frame 1 of 2. |
-| `ride-west-f1.png` | 80 x 80 | Vega on the horse, facing right and shooting ahead. Animation frame 2 of 2. |
-| `ride-west-b0.png` | 80 x 80 | Vega on the horse, facing right but turned to shoot backwards. Frame 1 of 2. |
-| `ride-west-b1.png` | 80 x 80 | Vega on the horse, facing right but turned to shoot backwards. Frame 2 of 2. |
-| `rideE-west-f0.png` | 80 x 80 | Enemy rider on the horse, facing right (chasing you). Frame 1 of 2. |
-| `rideE-west-f1.png` | 80 x 80 | Enemy rider on the horse, facing right (chasing you). Frame 2 of 2. |
-| `rideE-west-b0.png` | 80 x 80 | Enemy rider on the horse, turned back to shoot at you (being chased). Frame 1 of 2. |
-| `rideE-west-b1.png` | 80 x 80 | Enemy rider on the horse, turned back to shoot at you (being chased). Frame 2 of 2. |
+| `cactus.png` | 32 x 40 | Bonus chase: obstacle. |
+| `ride-west0.png` | 80 x 80 | Bonus chase: Vega on the horse, facing right and shooting ahead. Animation frame 1 of 2. |
+| `ride-west1.png` | 80 x 80 | Bonus chase: Vega on the horse, facing right and shooting ahead. Animation frame 2 of 2. |
+| `rideE-west0.png` | 80 x 80 | Bonus chase: an enemy rider on the horse, facing right but turned back to shoot at Vega. Frame 1 of 2. |
+| `rideE-west1.png` | 80 x 80 | Bonus chase: an enemy rider on the horse, facing right but turned back to shoot at Vega. Frame 2 of 2. |
 
 ## Feudal Japan
 
@@ -166,14 +150,10 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 | `road-japan.png` | 600 x 256 | Road tile, seen from above. Repeats top to bottom: the top and bottom edges must join. |
 | `hills-japan.png` | 512 x 220 | Vehicle stages: distant scenery with a see-through sky. Repeats sideways: left and right edges must join. |
 | `ground-japan.png` | 256 x 470 | Vehicle stages: the ground the vehicles race on. Repeats sideways: left and right edges must join. |
-| `ride-japan-f0.png` | 80 x 80 | Vega on the horse, facing right and shooting ahead. Animation frame 1 of 2. |
-| `ride-japan-f1.png` | 80 x 80 | Vega on the horse, facing right and shooting ahead. Animation frame 2 of 2. |
-| `ride-japan-b0.png` | 80 x 80 | Vega on the horse, facing right but turned to shoot backwards. Frame 1 of 2. |
-| `ride-japan-b1.png` | 80 x 80 | Vega on the horse, facing right but turned to shoot backwards. Frame 2 of 2. |
-| `rideE-japan-f0.png` | 80 x 80 | Enemy rider on the horse, facing right (chasing you). Frame 1 of 2. |
-| `rideE-japan-f1.png` | 80 x 80 | Enemy rider on the horse, facing right (chasing you). Frame 2 of 2. |
-| `rideE-japan-b0.png` | 80 x 80 | Enemy rider on the horse, turned back to shoot at you (being chased). Frame 1 of 2. |
-| `rideE-japan-b1.png` | 80 x 80 | Enemy rider on the horse, turned back to shoot at you (being chased). Frame 2 of 2. |
+| `ride-japan0.png` | 80 x 80 | Bonus chase: Vega on the horse, facing right and shooting ahead. Animation frame 1 of 2. |
+| `ride-japan1.png` | 80 x 80 | Bonus chase: Vega on the horse, facing right and shooting ahead. Animation frame 2 of 2. |
+| `rideE-japan0.png` | 80 x 80 | Bonus chase: an enemy rider on the horse, facing right but turned back to shoot at Vega. Frame 1 of 2. |
+| `rideE-japan1.png` | 80 x 80 | Bonus chase: an enemy rider on the horse, facing right but turned back to shoot at Vega. Frame 2 of 2. |
 
 ## Scandinavia
 
@@ -192,15 +172,11 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 | `road-norse.png` | 600 x 256 | Road tile, seen from above. Repeats top to bottom: the top and bottom edges must join. |
 | `hills-norse.png` | 512 x 220 | Vehicle stages: distant scenery with a see-through sky. Repeats sideways: left and right edges must join. |
 | `ground-norse.png` | 256 x 470 | Vehicle stages: the ground the vehicles race on. Repeats sideways: left and right edges must join. |
-| `iceberg.png` | 40 x 24 | Vehicle stages: obstacle. |
-| `ride-norse-f0.png` | 96 x 60 | Vega on the boat, facing right and shooting ahead. Animation frame 1 of 2. |
-| `ride-norse-f1.png` | 96 x 60 | Vega on the boat, facing right and shooting ahead. Animation frame 2 of 2. |
-| `ride-norse-b0.png` | 96 x 60 | Vega on the boat, facing right but turned to shoot backwards. Frame 1 of 2. |
-| `ride-norse-b1.png` | 96 x 60 | Vega on the boat, facing right but turned to shoot backwards. Frame 2 of 2. |
-| `rideE-norse-f0.png` | 96 x 60 | Enemy rider on the boat, facing right (chasing you). Frame 1 of 2. |
-| `rideE-norse-f1.png` | 96 x 60 | Enemy rider on the boat, facing right (chasing you). Frame 2 of 2. |
-| `rideE-norse-b0.png` | 96 x 60 | Enemy rider on the boat, turned back to shoot at you (being chased). Frame 1 of 2. |
-| `rideE-norse-b1.png` | 96 x 60 | Enemy rider on the boat, turned back to shoot at you (being chased). Frame 2 of 2. |
+| `iceberg.png` | 40 x 24 | Bonus chase: obstacle. |
+| `ride-norse0.png` | 96 x 60 | Bonus chase: Vega on the boat, facing right and shooting ahead. Animation frame 1 of 2. |
+| `ride-norse1.png` | 96 x 60 | Bonus chase: Vega on the boat, facing right and shooting ahead. Animation frame 2 of 2. |
+| `rideE-norse0.png` | 96 x 60 | Bonus chase: an enemy rider on the boat, facing right but turned back to shoot at Vega. Frame 1 of 2. |
+| `rideE-norse1.png` | 96 x 60 | Bonus chase: an enemy rider on the boat, facing right but turned back to shoot at Vega. Frame 2 of 2. |
 
 ## The Stone Age
 
@@ -219,14 +195,10 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 | `road-stone.png` | 600 x 256 | Road tile, seen from above. Repeats top to bottom: the top and bottom edges must join. |
 | `hills-stone.png` | 512 x 220 | Vehicle stages: distant scenery with a see-through sky. Repeats sideways: left and right edges must join. |
 | `ground-stone.png` | 256 x 470 | Vehicle stages: the ground the vehicles race on. Repeats sideways: left and right edges must join. |
-| `ride-stone-f0.png` | 80 x 76 | Vega on the raptor, facing right and shooting ahead. Animation frame 1 of 2. |
-| `ride-stone-f1.png` | 80 x 76 | Vega on the raptor, facing right and shooting ahead. Animation frame 2 of 2. |
-| `ride-stone-b0.png` | 80 x 76 | Vega on the raptor, facing right but turned to shoot backwards. Frame 1 of 2. |
-| `ride-stone-b1.png` | 80 x 76 | Vega on the raptor, facing right but turned to shoot backwards. Frame 2 of 2. |
-| `rideE-stone-f0.png` | 80 x 76 | Enemy rider on the raptor, facing right (chasing you). Frame 1 of 2. |
-| `rideE-stone-f1.png` | 80 x 76 | Enemy rider on the raptor, facing right (chasing you). Frame 2 of 2. |
-| `rideE-stone-b0.png` | 80 x 76 | Enemy rider on the raptor, turned back to shoot at you (being chased). Frame 1 of 2. |
-| `rideE-stone-b1.png` | 80 x 76 | Enemy rider on the raptor, turned back to shoot at you (being chased). Frame 2 of 2. |
+| `ride-stone0.png` | 80 x 76 | Bonus chase: Vega on the raptor, facing right and shooting ahead. Animation frame 1 of 2. |
+| `ride-stone1.png` | 80 x 76 | Bonus chase: Vega on the raptor, facing right and shooting ahead. Animation frame 2 of 2. |
+| `rideE-stone0.png` | 80 x 76 | Bonus chase: an enemy rider on the raptor, facing right but turned back to shoot at Vega. Frame 1 of 2. |
+| `rideE-stone1.png` | 80 x 76 | Bonus chase: an enemy rider on the raptor, facing right but turned back to shoot at Vega. Frame 2 of 2. |
 
 ## Chrome City
 
@@ -246,15 +218,11 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 | `road-chrome.png` | 600 x 256 | Road tile, seen from above. Repeats top to bottom: the top and bottom edges must join. |
 | `hills-chrome.png` | 512 x 220 | Vehicle stages: distant scenery with a see-through sky. Repeats sideways: left and right edges must join. |
 | `ground-chrome.png` | 256 x 470 | Vehicle stages: the ground the vehicles race on. Repeats sideways: left and right edges must join. |
-| `barrier.png` | 40 x 28 | Vehicle stages: obstacle. |
-| `ride-chrome-f0.png` | 88 x 60 | Vega on the hoverbike, facing right and shooting ahead. Animation frame 1 of 2. |
-| `ride-chrome-f1.png` | 88 x 60 | Vega on the hoverbike, facing right and shooting ahead. Animation frame 2 of 2. |
-| `ride-chrome-b0.png` | 88 x 60 | Vega on the hoverbike, facing right but turned to shoot backwards. Frame 1 of 2. |
-| `ride-chrome-b1.png` | 88 x 60 | Vega on the hoverbike, facing right but turned to shoot backwards. Frame 2 of 2. |
-| `rideE-chrome-f0.png` | 88 x 60 | Enemy rider on the hoverbike, facing right (chasing you). Frame 1 of 2. |
-| `rideE-chrome-f1.png` | 88 x 60 | Enemy rider on the hoverbike, facing right (chasing you). Frame 2 of 2. |
-| `rideE-chrome-b0.png` | 88 x 60 | Enemy rider on the hoverbike, turned back to shoot at you (being chased). Frame 1 of 2. |
-| `rideE-chrome-b1.png` | 88 x 60 | Enemy rider on the hoverbike, turned back to shoot at you (being chased). Frame 2 of 2. |
+| `barrier.png` | 40 x 28 | Bonus chase: obstacle. |
+| `ride-chrome0.png` | 88 x 60 | Bonus chase: Vega on the hoverbike, facing right and shooting ahead. Animation frame 1 of 2. |
+| `ride-chrome1.png` | 88 x 60 | Bonus chase: Vega on the hoverbike, facing right and shooting ahead. Animation frame 2 of 2. |
+| `rideE-chrome0.png` | 88 x 60 | Bonus chase: an enemy rider on the hoverbike, facing right but turned back to shoot at Vega. Frame 1 of 2. |
+| `rideE-chrome1.png` | 88 x 60 | Bonus chase: an enemy rider on the hoverbike, facing right but turned back to shoot at Vega. Frame 2 of 2. |
 
 ## The Wasteland
 
@@ -274,15 +242,11 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 | `road-waste.png` | 600 x 256 | Road tile, seen from above. Repeats top to bottom: the top and bottom edges must join. |
 | `hills-waste.png` | 512 x 220 | Vehicle stages: distant scenery with a see-through sky. Repeats sideways: left and right edges must join. |
 | `ground-waste.png` | 256 x 470 | Vehicle stages: the ground the vehicles race on. Repeats sideways: left and right edges must join. |
-| `tires.png` | 48 x 36 | Vehicle stages: obstacle. |
-| `ride-waste-f0.png` | 96 x 76 | Vega on the buggy, facing right and shooting ahead. Animation frame 1 of 2. |
-| `ride-waste-f1.png` | 96 x 76 | Vega on the buggy, facing right and shooting ahead. Animation frame 2 of 2. |
-| `ride-waste-b0.png` | 96 x 76 | Vega on the buggy, facing right but turned to shoot backwards. Frame 1 of 2. |
-| `ride-waste-b1.png` | 96 x 76 | Vega on the buggy, facing right but turned to shoot backwards. Frame 2 of 2. |
-| `rideE-waste-f0.png` | 96 x 76 | Enemy rider on the buggy, facing right (chasing you). Frame 1 of 2. |
-| `rideE-waste-f1.png` | 96 x 76 | Enemy rider on the buggy, facing right (chasing you). Frame 2 of 2. |
-| `rideE-waste-b0.png` | 96 x 76 | Enemy rider on the buggy, turned back to shoot at you (being chased). Frame 1 of 2. |
-| `rideE-waste-b1.png` | 96 x 76 | Enemy rider on the buggy, turned back to shoot at you (being chased). Frame 2 of 2. |
+| `tires.png` | 48 x 36 | Bonus chase: obstacle. |
+| `ride-waste0.png` | 96 x 76 | Bonus chase: Vega on the buggy, facing right and shooting ahead. Animation frame 1 of 2. |
+| `ride-waste1.png` | 96 x 76 | Bonus chase: Vega on the buggy, facing right and shooting ahead. Animation frame 2 of 2. |
+| `rideE-waste0.png` | 96 x 76 | Bonus chase: an enemy rider on the buggy, facing right but turned back to shoot at Vega. Frame 1 of 2. |
+| `rideE-waste1.png` | 96 x 76 | Bonus chase: an enemy rider on the buggy, facing right but turned back to shoot at Vega. Frame 2 of 2. |
 
 ## Mars Colony
 
@@ -302,15 +266,11 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 | `road-mars.png` | 600 x 256 | Road tile, seen from above. Repeats top to bottom: the top and bottom edges must join. |
 | `hills-mars.png` | 512 x 220 | Vehicle stages: distant scenery with a see-through sky. Repeats sideways: left and right edges must join. |
 | `ground-mars.png` | 256 x 470 | Vehicle stages: the ground the vehicles race on. Repeats sideways: left and right edges must join. |
-| `redrock.png` | 40 x 24 | Vehicle stages: obstacle. |
-| `ride-mars-f0.png` | 104 x 76 | Vega on the rover, facing right and shooting ahead. Animation frame 1 of 2. |
-| `ride-mars-f1.png` | 104 x 76 | Vega on the rover, facing right and shooting ahead. Animation frame 2 of 2. |
-| `ride-mars-b0.png` | 104 x 76 | Vega on the rover, facing right but turned to shoot backwards. Frame 1 of 2. |
-| `ride-mars-b1.png` | 104 x 76 | Vega on the rover, facing right but turned to shoot backwards. Frame 2 of 2. |
-| `rideE-mars-f0.png` | 104 x 76 | Enemy rider on the rover, facing right (chasing you). Frame 1 of 2. |
-| `rideE-mars-f1.png` | 104 x 76 | Enemy rider on the rover, facing right (chasing you). Frame 2 of 2. |
-| `rideE-mars-b0.png` | 104 x 76 | Enemy rider on the rover, turned back to shoot at you (being chased). Frame 1 of 2. |
-| `rideE-mars-b1.png` | 104 x 76 | Enemy rider on the rover, turned back to shoot at you (being chased). Frame 2 of 2. |
+| `redrock.png` | 40 x 24 | Bonus chase: obstacle. |
+| `ride-mars0.png` | 104 x 76 | Bonus chase: Vega on the rover, facing right and shooting ahead. Animation frame 1 of 2. |
+| `ride-mars1.png` | 104 x 76 | Bonus chase: Vega on the rover, facing right and shooting ahead. Animation frame 2 of 2. |
+| `rideE-mars0.png` | 104 x 76 | Bonus chase: an enemy rider on the rover, facing right but turned back to shoot at Vega. Frame 1 of 2. |
+| `rideE-mars1.png` | 104 x 76 | Bonus chase: an enemy rider on the rover, facing right but turned back to shoot at Vega. Frame 2 of 2. |
 
 ## The Star Empire
 
@@ -330,15 +290,11 @@ Every built-in sprite, at the size it appears in the game. To replace one, see `
 | `road-star.png` | 600 x 256 | Road tile, seen from above. Repeats top to bottom: the top and bottom edges must join. |
 | `hills-star.png` | 512 x 220 | Vehicle stages: distant scenery with a see-through sky. Repeats sideways: left and right edges must join. |
 | `ground-star.png` | 256 x 470 | Vehicle stages: the ground the vehicles race on. Repeats sideways: left and right edges must join. |
-| `asteroid.png` | 40 x 28 | Vehicle stages: obstacle. |
-| `ride-star-f0.png` | 116 x 60 | Vega on the starfighter, facing right and shooting ahead. Animation frame 1 of 2. |
-| `ride-star-f1.png` | 116 x 60 | Vega on the starfighter, facing right and shooting ahead. Animation frame 2 of 2. |
-| `ride-star-b0.png` | 116 x 60 | Vega on the starfighter, facing right but turned to shoot backwards. Frame 1 of 2. |
-| `ride-star-b1.png` | 116 x 60 | Vega on the starfighter, facing right but turned to shoot backwards. Frame 2 of 2. |
-| `rideE-star-f0.png` | 116 x 60 | Enemy rider on the starfighter, facing right (chasing you). Frame 1 of 2. |
-| `rideE-star-f1.png` | 116 x 60 | Enemy rider on the starfighter, facing right (chasing you). Frame 2 of 2. |
-| `rideE-star-b0.png` | 116 x 60 | Enemy rider on the starfighter, turned back to shoot at you (being chased). Frame 1 of 2. |
-| `rideE-star-b1.png` | 116 x 60 | Enemy rider on the starfighter, turned back to shoot at you (being chased). Frame 2 of 2. |
+| `asteroid.png` | 40 x 28 | Bonus chase: obstacle. |
+| `ride-star0.png` | 116 x 60 | Bonus chase: Vega on the starfighter, facing right and shooting ahead. Animation frame 1 of 2. |
+| `ride-star1.png` | 116 x 60 | Bonus chase: Vega on the starfighter, facing right and shooting ahead. Animation frame 2 of 2. |
+| `rideE-star0.png` | 116 x 60 | Bonus chase: an enemy rider on the starfighter, facing right but turned back to shoot at Vega. Frame 1 of 2. |
+| `rideE-star1.png` | 116 x 60 | Bonus chase: an enemy rider on the starfighter, facing right but turned back to shoot at Vega. Frame 2 of 2. |
 
 ## Backpack icons
 

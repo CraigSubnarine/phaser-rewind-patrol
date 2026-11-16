@@ -296,17 +296,14 @@ const VEHICLES = {
   rover: (rider, f) => compose(26, 19, [[rider, 8, 2], [ROVER, 0, 7], ...[1, 10, 19].map(c => [recolor(WHEEL[f], { 7: '5' }), c, 12])]),
   starfighter: (rider, f) => compose(29, 15, [[rider, 9, 0], [SHIP, 3, 8], [FLAME[f], 0, 10]]),
 };
-// Riders for every timeline: Vega facing forward ('f') and looking back ('b'), and that timeline's enemy, both ways.
+// Riders for every timeline's bonus chase: Vega facing ahead, and that timeline's enemy turned back to shoot at him.
 function makeRiders(eras) {
   for (const era of eras) {
-    const enemy = recolor(RIDER, era.rider);
+    const enemy = mirror(recolor(RIDER, era.rider));
     for (const f of [0, 1]) {
       const build = VEHICLES[era.vehicle];
-      Object.assign(ART, {
-        [`ride-${era.id}-f${f}`]: build(RIDER, f), [`ride-${era.id}-b${f}`]: build(mirror(RIDER), f),
-        [`rideE-${era.id}-f${f}`]: build(enemy, f), [`rideE-${era.id}-b${f}`]: build(mirror(enemy), f),
-      });
-      for (const k of ['ride', 'rideE']) for (const d of ['f', 'b']) PIXEL[`${k}-${era.id}-${d}${f}`] = 4;
+      Object.assign(ART, { [`ride-${era.id}${f}`]: build(RIDER, f), [`rideE-${era.id}${f}`]: build(enemy, f) });
+      for (const k of ['ride', 'rideE']) PIXEL[`${k}-${era.id}${f}`] = 4;
     }
   }
 }

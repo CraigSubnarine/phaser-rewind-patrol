@@ -71,6 +71,7 @@ class Play extends Phaser.Scene {
     // false = don't swallow these keys, so the menus keep working with the keyboard.
     this.keys = this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S', false);
     this.hud = this.add.text(14, 14, '', { fontFamily: FONT, fontSize: '14px', color: '#ffffff', lineSpacing: 8, stroke: '#000000', strokeThickness: 4 }).setDepth(10);
+    this.hud.screen = true; // (stays put on screen in the 3D view; see view3d.js)
     this.shieldRing = this.add.graphics().setDepth(3);
     this.hpBars = this.add.graphics().setDepth(3); // health bars over soldiers that take more than one hit
     this.partners = [];
@@ -421,6 +422,7 @@ class Play extends Phaser.Scene {
     const t = this.add.text(W / 2, H * 0.42, text, {
       fontFamily: FONT, fontSize: `${size}px`, color: '#ff4fd8', align: 'center', stroke: '#140a26', strokeThickness: 6, lineSpacing: 14,
     }).setOrigin(0.5).setDepth(10).setAlpha(0);
+    t.screen = true;
     this.tweens.add({ targets: t, alpha: 1, duration: 250, hold: ms - 500, yoyo: true, onComplete: () => t.destroy() });
   }
 
@@ -690,6 +692,7 @@ class Play extends Phaser.Scene {
     const t = this.add.text(W / 2, 180 + b.displayHeight / 2 + 22, `"${text}"`, {
       fontFamily: FONT, fontSize: '12px', color: '#ffffff', align: 'center', stroke: '#000000', strokeThickness: 4, lineSpacing: 6, wordWrap: { width: W - 80 },
     }).setOrigin(0.5, 0).setDepth(10);
+    t.screen = true;
     this.tweens.add({ targets: t, alpha: 0, delay: 2400, duration: 400, onComplete: () => t.destroy() });
   }
 
@@ -1074,7 +1077,8 @@ class Play extends Phaser.Scene {
     if (app.state !== 'playing' || !this.playing || !this.player?.active) return;
     const r = this.game.canvas.getBoundingClientRect(), k = W / r.width;
     if (e.pointerType === 'mouse') {
-      this.setTarget((e.clientX - r.left) * k, (e.clientY - r.top) * k);
+      const onRoad = view3d.toGame(e.clientX, e.clientY); // in 3D: the point on the road under the pointer
+      this.setTarget(onRoad?.x ?? (e.clientX - r.left) * k, onRoad?.y ?? (e.clientY - r.top) * k);
     } else if (drag) {
       this.setTarget(this.target.x + (e.clientX - drag.x) * k * 1.4, this.target.y + (e.clientY - drag.y) * k * 1.4);
       drag.x = e.clientX;
@@ -1503,4 +1507,5 @@ Promise.race([document.fonts?.load(`16px ${FONT}`), new Promise(r => setTimeout(
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
     scene: Play,
   });
+  game.events.on('poststep', () => view3d.sync()); // the 3D view draws after every step (see view3d.js)
 });

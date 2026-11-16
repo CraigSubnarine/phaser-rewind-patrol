@@ -734,6 +734,58 @@ async function run(browser, name, options) {
       });
     }
 
+    // ----- The 3D view (Settings: Graphics 3D): Rome's army and bosses as models, other timelines as cut-outs -----
+    const view = await page.evaluate(() => {
+      const s = scene(), hold = on => { s.invulnUntil = Infinity; if (on) s.nextFire = s.t + 1000; };
+      settings.graphics = '3d';
+      s.E = ERA.rome;
+      s.road.setTexture('road-rome');
+      s.formation(['SSSSS', 'GGGGG', 'CHCHC']);
+      for (let f = 0; f < 90; f++) { hold(true); __step(1); }
+      s.nextFire = 0;
+      for (let f = 0; f < 20; f++) { hold(false); __step(1); }
+      const c = document.getElementById('view3d'), st = view3d.stats;
+      return { active: view3d.active, shown: !!c && !c.hidden, phaserHidden: !s.sys.settings.visible, models: st.models, enemies: st.kinds.enemy, shots: st.kinds.shot,
+        hud: [...document.querySelectorAll('#overlay3d .label3d')].some(l => /SCORE/.test(l.textContent)) };
+    });
+    await page.evaluate(() => game.loop.resetDelta());
+    await shot('12-3d-rome');
+    check(`${name}: 3D view: Rome's army as models, Vega's shots, the HUD as text on top (Phaser stops drawing)`,
+      view.active && view.shown && view.phaserHidden && view.models >= 12 && view.enemies >= 12 && view.shots >= 1 && view.hud, JSON.stringify(view));
+    const boss3d = await page.evaluate(() => {
+      const s = scene();
+      s.enemies.clear(true, true);
+      s.spawnBoss(true); // the Iron Centurion
+      for (let f = 0; f < 180; f++) { s.invulnUntil = Infinity; s.nextFire = s.t + 1000; __step(1); }
+      const r = { boss: s.boss.cfg.key, models: view3d.stats.models, bar: !document.getElementById('bossbar3d').hidden };
+      s.bossColliders.forEach(c => c.destroy());
+      s.bossBar.destroy();
+      s.tweens.killTweensOf(s.boss);
+      s.boss.destroy();
+      s.boss = null;
+      s.E = ERA.chrome; // a timeline without models yet: cut-outs of its sprites
+      s.road.setTexture('road-chrome');
+      s.formation(['GGGGG', 'SHSCS']);
+      for (let f = 0; f < 80; f++) { s.invulnUntil = Infinity; s.nextFire = s.t + 1000; __step(1); }
+      r.cutouts = view3d.stats.kinds.enemy;
+      // A bonus chase is still drawn in 2D, and switching Graphics back to 2D hands drawing back to Phaser.
+      s.enemies.clear(true, true);
+      s.bonus = { caught: 0, endsAt: s.t + 1e6 };
+      s.setView('side');
+      __step(2);
+      r.chase2d = !view3d.active && s.sys.settings.visible;
+      s.bonus = null;
+      s.setView('top');
+      __step(2);
+      r.back3d = view3d.active;
+      settings.graphics = '2d';
+      __step(2);
+      r.off = !view3d.active && s.sys.settings.visible && document.getElementById('view3d').hidden;
+      return r;
+    });
+    check(`${name}: 3D view: the boss as a model with its health bar, other timelines as cut-outs, chases in 2D, back to 2D`,
+      boss3d.boss === 'centurion' && boss3d.models >= 2 && boss3d.bar && boss3d.cutouts >= 8 && boss3d.chase2d && boss3d.back3d && boss3d.off, JSON.stringify(boss3d));
+
     // A full route with at least two future timelines (one with a bonus chase), whose bonus plan has a chase after the
     // first mini-boss and a mini-boss with no bonus level.
     const routeSeed = await page.evaluate(() => {

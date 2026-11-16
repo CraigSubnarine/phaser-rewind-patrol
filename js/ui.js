@@ -5,7 +5,7 @@ const store = {
   get(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } },
   set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} },
 };
-const settings = { sound: true, difficulty: 'normal', ...store.get('rewind-settings', {}) };
+const settings = { sound: true, difficulty: 'normal', graphics: '2d', ...store.get('rewind-settings', {}) };
 if (!DIFFICULTY[settings.difficulty]) settings.difficulty = 'normal';
 const saveSettings = () => store.set('rewind-settings', settings);
 const bestKey = () => `rewind-best-${settings.difficulty}`;
@@ -387,6 +387,10 @@ $('ui').addEventListener('click', e => {
 });
 $('pauseBtn').addEventListener('click', pauseGame);
 $('itemBtn').addEventListener('click', () => scene()?.useActive());
+for (const r of document.querySelectorAll('input[name=graphics]')) { // 2D or 3D (beta): switches straight away, even mid-run
+  r.checked = r.value === settings.graphics;
+  r.addEventListener('change', () => { settings.graphics = r.value; saveSettings(); });
+}
 for (const r of document.querySelectorAll('input[name=difficulty]')) {
   r.checked = r.value === settings.difficulty;
   r.addEventListener('change', () => { settings.difficulty = r.value; saveSettings(); updateMainBest(); });

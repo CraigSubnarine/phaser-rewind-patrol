@@ -38,7 +38,8 @@ No build step and no asset files: the pixel art is drawn from text grids in the 
 - **Active items:** charge up as you defeat enemies, then fire with the item button. One at a time (buying another replaces it, selling it back for half). Air Support (clear the screen), VCR Remote (skip the stage), Police Siren (freeze enemies), and one per timeline: Testudo, Trebuchet Call, Broadside, Stampede, Petal Storm, Thunder Hammer, Meteor Shower, EMP Blast (damage and freeze), Nitro (triple fire rate and double speed for 5 s), Orbital Strike (a beam on every enemy), Black Hole (pulls enemies together, then collapses).
 - **Combos** (`COMBOS`, 29): owning both halves unlocks a bonus, e.g. Pilum + Longbow = Volley Fire, Dynamite + Ship's Cannon = Chain Reaction, Throwing Axes + Shuriken Ring = Returning Axes, Bushido + Berserker Rage = Last Stand, Molotov + Fire = Firebomb, Photon Torpedo + Smart Rounds = Torpedo Bay. Replace one half and the combo goes too. Since each run visits a different 5 timelines, which combos are even possible changes from run to run. Shop cards say which combo an item starts or completes.
 - **Seeds:** every run has a seed (shown on the story screen, pause menu and end screen; you can type your own). The same seed gives the same 5 timelines, the same endless timelines and the same shop offers. The pause menu shows the run's route.
-- Menu, story screen, settings (difficulty, sound), pause, game over and win screens. Best score kept per difficulty.
+- Menu, story screen, settings (difficulty, sound, graphics), pause, game over and win screens. Best score kept per difficulty.
+- **3D view (beta)** (Settings: Graphics 3D, switches straight away): the same game drawn with three.js from a chase camera behind Vega, the road running off into the distance. Phaser still runs everything; `js/view3d.js` draws its objects in 3D every frame. Rome's army and bosses, Vega, his partner and the pickups are low-poly models (`js/models3d.js`); other timelines are shown as upright cut-outs of their sprites until their models are built, and bonus chases are still 2D. Plan: `GameDev/rewind-patrol-backpack-3d-plan.md`.
 
 ## Replay and competition (Arcade standard)
 
@@ -57,6 +58,7 @@ Any built-in sprite can be swapped for your own PNG: put it in `assets/sprites/`
 - `js/data.js`: constants, timelines, stage table, difficulty, upgrades, combos, and the pure `computeStats` / `priceOf` helpers.
 - `js/art.js`: pixel-art grids, Vega's walk frames, and the road tiles.
 - `js/ui.js`: settings, sound, menus, the shop screen, the item button, input.
+- `js/models3d.js`, `js/view3d.js`: the 3D view's models, and the view itself (three.js 0.149 from a CDN).
 - `js/game.js`: the Phaser scene (stage flow, shooting, enemies, bosses, items). `preload()` loads your own sprites; `create()` generates the rest.
 - `assets/`: your own sprites (`sprites/`) and the templates to draw them from (`templates/`).
 - `tools/`: `playtest.js`, `sprites.js` (register / export sprites) and `server.js` (the local web server both use).

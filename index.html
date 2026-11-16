@@ -67,15 +67,20 @@
   .card .combo { grid-column: 1 / -1; color: var(--pink); font-size: .8rem; }
   .card.sold { opacity: .3; }
   /* The backpack: a grid of cells; pieces color their cells (outlined), with their icon and tier on top */
-  .backpack { --cell: 42px; display: grid; grid-template-columns: repeat(4, var(--cell)); grid-template-rows: repeat(var(--rows), var(--cell)); margin: 0 auto; }
+  .backpack { --cell: 42px; display: grid; width: max-content; grid-template-columns: repeat(4, var(--cell)); grid-template-rows: repeat(var(--rows), var(--cell)); margin: 0 auto; }
   .backpack .cell { box-sizing: border-box; margin: 1px; border: 2px solid transparent; border-radius: 4px; background: rgb(0 0 0 / .3); }
   .backpack .piece { position: relative; display: grid; place-items: center; min-height: 0; padding: 0; margin: 0; border: 0; border-radius: 4px; background: none; container-type: size; overflow: visible; }
   .backpack .piece img { width: 78cqw; height: 78cqh; object-fit: contain; image-rendering: pixelated; pointer-events: none; }
-  .backpack .piece img.turned { width: 78cqh; height: 78cqw; transform: rotate(90deg); }
+  .backpack .piece img.turned { position: absolute; left: 50%; top: 50%; width: 78cqh; height: 78cqw; transform: translate(-50%, -50%) rotate(90deg); }
   .backpack .piece i { position: absolute; right: 3px; bottom: 1px; font: .55rem "Press Start 2P", monospace; font-style: normal; color: var(--gold); text-shadow: 1px 1px 0 #000; }
   .backpack .piece.picked { outline: 3px solid var(--gold); outline-offset: -2px; }
-  #sellBtn { background: var(--gold); color: #1a0820; font-weight: 700; }
-  #sellBtn[hidden] { display: none; }
+  #sellBtn { flex: 2; background: var(--gold); color: #1a0820; font-weight: 700; }
+  #pieceRow[hidden], #turnBtn[hidden] { display: none; }
+  .backpack { touch-action: none; } /* dragging a piece mustn't scroll the shop */
+  .backpack .landing { margin: 1px; border-radius: 4px; background: rgb(79 240 255 / .5); pointer-events: none; }
+  .backpack .landing.bad { background: rgb(255 59 59 / .5); }
+  .backpack .piece.dragging { opacity: .4; }
+  .shop-note-hint { font-size: .8rem; color: var(--muted); }
   .card .shape { display: inline-grid; grid-template-columns: repeat(var(--w), 7px); gap: 1px; vertical-align: middle; margin-right: 4px; }
   .card .shape span { width: 7px; height: 7px; }
   .card .shape span.on { background: var(--cyan); }
@@ -109,7 +114,8 @@
   <section class="screen shop" id="shop" hidden>
     <div class="shop-head"><h2 id="shopTitle">MARKET</h2><span id="shopCoins"></span></div>
     <div class="pack-wrap" id="shopLoadout" aria-label="Your backpack"></div>
-    <button id="sellBtn" data-action="sell" hidden></button>
+    <p class="shop-note-hint">Drag a piece to move it; tap one to turn or sell it.</p>
+    <div class="shop-row" id="pieceRow" hidden><button id="turnBtn" data-action="turn">Turn &#8635;</button><button id="sellBtn" data-action="sell"></button></div>
     <p id="shopNote"></p>
     <div id="shopItems"></div>
     <div class="shop-row">

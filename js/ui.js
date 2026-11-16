@@ -229,19 +229,23 @@ function renderShop() {
   $('shopCoins').textContent = `$${coins}  HP ${s.hp}/${s.P.maxHp}`;
   if (shop.picked && !s.owned[shop.picked]) shop.picked = null;
   $('shopLoadout').innerHTML = backpackHtml(s, true, shop.picked);
-  $('sellBtn').hidden = !shop.picked;
-  if (shop.picked) $('sellBtn').textContent = `Sell ${UPGRADE[shop.picked].name} ${TIERS[s.owned[shop.picked]]} for $${s.refundFor(shop.picked)}`;
+  $('pieceRow').hidden = !shop.picked;
+  if (shop.picked) {
+    $('sellBtn').textContent = `Sell ${UPGRADE[shop.picked].name} ${TIERS[s.owned[shop.picked]]} for $${s.refundFor(shop.picked)}`;
+    $('turnBtn').hidden = turns(cellsOf(SHAPES[UPGRADE[shop.picked].shape])).length < 2; // 1x1 and 2x2 look the same turned
+  }
   $('shopItems').replaceChildren(...shop.offers.map((u, i) => {
     const cost = priceOf(u, s.owned), sold = shop.sold.has(i), kind = s.buyKind(u), refund = kind === 'swap' ? s.refundFor(s.P.active.id) : 0;
     const what = {
       merge: `Merges into tier ${TIERS[(s.owned[u.id] || 0) + 1]}`, fit: u.active ? '' : 'Fits in your backpack',
+      repack: 'Fits if your backpack is rearranged (it will be, if you buy it)',
       swap: `Replaces your ${s.P.active?.name} (+$${refund} back)`, max: 'Max tier',
       room: 'No room in your backpack: sell something first', companions: 'You already have two companions: sell one first',
     }[kind];
     const b = document.createElement('button');
     b.className = `card${sold ? ' sold' : ''}`;
     b.dataset.buy = i;
-    b.disabled = sold || !['merge', 'fit', 'swap'].includes(kind) || cost > coins + refund;
+    b.disabled = sold || !['merge', 'fit', 'repack', 'swap'].includes(kind) || cost > coins + refund;
     b.innerHTML = `<span class="tag">${u.active ? 'ACTIVE ITEM' : `${SHAPE_NAMES[u.shape]} PIECE`} &middot; ${u.era ? `${ERA[u.era].name.toUpperCase()} ONLY` : 'ANY TIMELINE'}</span>`
       + `<b>${u.active ? '' : `${shapeHtml(u)} `}${u.name}</b><span class="price">${sold ? 'SOLD' : `$${cost}`}</span><small>${u.desc}</small>`
       + `${what ? `<span class="combo">${what}</span>` : ''}${comboHint(u, s.owned)}`;
@@ -265,6 +269,55 @@ function shopBuy(i) {
   if (notes.length) $('shopNote').textContent = notes.join(' ');
   if (unlocked.length) jingle([523, 659, 784, 1046, 1318]);
   else beep(880, 60);
+  renderShop();
+}
+// Arranging the backpack in the shop: drag a piece to move it (a green or red outline shows where it would land), tap
+// one to pick it, then Turn or Sell it.
+let packDrag = null;
+const packBox = () => $('shopLoadout').querySelector('.backpack');
+function packCell(e) {
+  const box = packBox().getBoundingClientRect();
+  return [Math.floor((e.clientX - box.left) / (box.width / BACKPACK.w)), Math.floor((e.clientY - box.top) / (box.height / scene().packRows))];
+}
+function showLanding(cells, ok) {
+  const box = packBox();
+  box.querySelectorAll('.landing').forEach(g => g.remove());
+  for (const [x, y] of cells) {
+    if (x >= 0 && y >= 0 && x < BACKPACK.w && y < scene().packRows) box.insertAdjacentHTML('beforeend', `<div class="landing${ok ? '' : ' bad'}" style="grid-area:${y + 1}/${x + 1}"></div>`);
+  }
+  box.querySelector(`[data-piece="${packDrag.id}"]`)?.classList.add('dragging');
+}
+$('shopLoadout').addEventListener('pointerdown', e => {
+  const piece = e.target.closest('[data-piece]');
+  if (!piece || app.state !== 'shop') return;
+  e.preventDefault();
+  const cells = scene().pack[piece.dataset.piece], [gx, gy] = packCell(e);
+  const x0 = Math.min(...cells.map(c => c[0])), y0 = Math.min(...cells.map(c => c[1]));
+  packDrag = { id: piece.dataset.piece, start: [gx, gy], grab: [gx - x0, gy - y0], to: null };
+  $('shopLoadout').setPointerCapture(e.pointerId);
+});
+$('shopLoadout').addEventListener('pointermove', e => {
+  if (!packDrag) return;
+  const [gx, gy] = packCell(e);
+  if (!packDrag.to && gx === packDrag.start[0] && gy === packDrag.start[1]) return; // still a tap
+  const s = scene(), cells = s.pack[packDrag.id], x0 = Math.min(...cells.map(c => c[0])), y0 = Math.min(...cells.map(c => c[1]));
+  const dx = gx - packDrag.grab[0] - x0, dy = gy - packDrag.grab[1] - y0;
+  packDrag.to = cells.map(([x, y]) => [x + dx, y + dy]);
+  showLanding(packDrag.to, s.canPlace(packDrag.id, packDrag.to));
+});
+$('shopLoadout').addEventListener('pointerup', () => {
+  if (!packDrag) return;
+  const { id, to } = packDrag;
+  packDrag = null;
+  if (!to) app.shop.picked = app.shop.picked === id ? null : id; // a tap: pick it (or put it down)
+  else if (scene().movePiece(id, to)) { app.shop.picked = id; beep(660, 40); }
+  renderShop();
+});
+$('shopLoadout').addEventListener('pointercancel', () => { packDrag = null; renderShop(); });
+function shopTurn() {
+  if (!app.shop.picked) return;
+  if (scene().turnPiece(app.shop.picked)) beep(700, 40);
+  else $('shopNote').textContent = 'No room to turn it: move something out of the way first.';
   renderShop();
 }
 // Tap a piece to pick it (the sell button shows its price), tap the sell button to sell it.
@@ -312,7 +365,10 @@ $('ui').addEventListener('click', e => {
   const btn = e.target.closest('button');
   if (!btn || !scene()) return;
   if (btn.dataset.buy !== undefined) return shopBuy(Number(btn.dataset.buy));
-  if (btn.dataset.piece !== undefined) { app.shop.picked = app.shop.picked === btn.dataset.piece ? null : btn.dataset.piece; return renderShop(); }
+  if (btn.dataset.piece !== undefined) { // (taps and drags are handled above; this is Enter or Space on a piece)
+    if (e.detail === 0) app.shop.picked = app.shop.picked === btn.dataset.piece ? null : btn.dataset.piece;
+    return renderShop();
+  }
   const action = btn.dataset.action;
   if (action === 'play') showStory();
   else if (action === 'start') startGame($('seedInput').value);
@@ -324,6 +380,7 @@ $('ui').addEventListener('click', e => {
   else if (action === 'reroll') shopReroll();
   else if (action === 'heal') shopHeal();
   else if (action === 'sell') shopSell();
+  else if (action === 'turn') shopTurn();
   else if (action === 'continue') closeShop();
   else if (action === 'home') choose(false);
   else if (action === 'endless') choose(true);

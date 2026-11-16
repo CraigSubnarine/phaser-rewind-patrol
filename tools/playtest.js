@@ -583,13 +583,35 @@ async function run(browser, name, options) {
     const sold = await page.evaluate(() => {
       const s = scene(), coins = s.coins;
       document.getElementById('sellBtn').click();
-      const r = { refund: s.coins - coins, cannonGone: !s.pack.cannon, scutumNow: !document.querySelector('#shopItems [data-buy="1"]').disabled };
+      return { refund: s.coins - coins, cannonGone: !s.pack.cannon, scutumNow: !document.querySelector('#shopItems [data-buy="1"]').disabled };
+    });
+    // Arranging by hand, with a real pointer: drag the vest into the cannon's old place, then tap the longbow and turn it.
+    const cellAt = (x, y) => page.evaluate(([x, y]) => {
+      const b = document.querySelector('#shopLoadout .backpack');
+      b.scrollIntoView({ block: 'center' });
+      const r = b.getBoundingClientRect();
+      return [r.left + (x + 0.5) * r.width / BACKPACK.w, r.top + (y + 0.5) * r.height / scene().packRows];
+    }, [x, y]);
+    const vestAt = await page.evaluate(() => scene().pack.vest[0]);
+    const [ax, ay] = await cellAt(...vestAt), [bx, by] = await cellAt(2, 0);
+    await page.mouse.move(ax, ay);
+    await page.mouse.down();
+    await page.mouse.move(bx, by, { steps: 6 });
+    await page.mouse.up();
+    const bowAt = await page.evaluate(() => scene().pack.longbow[0]);
+    const [lx, ly] = await cellAt(...bowAt);
+    await page.mouse.click(lx, ly);
+    const arranged = await page.evaluate(() => {
+      const s = scene(), picked = app.shop.picked, before = JSON.stringify(s.pack.longbow);
+      document.getElementById('turnBtn').click();
+      const bow = s.pack.longbow, r = { vest: s.pack.vest[0], picked, turned: before !== JSON.stringify(bow) && new Set(bow.map(c => c[0])).size === 1 };
       s.sys.resume(); // back to the wave (closing the shop the normal way would start the next stage)
       app.state = 'playing';
       showScreen(null);
       document.getElementById('pauseBtn').hidden = false;
       return r;
     });
+    check(`${name}: drag a piece to move it, tap one and Turn it`, JSON.stringify(arranged.vest) === '[2,0]' && arranged.picked === 'longbow' && arranged.turned, JSON.stringify(arranged));
     check(`${name}: the backpack: pieces fill it, one that won't fit says "no room", owned items merge, tap a piece to sell it`,
       packUi.cells === 12 && packUi.pieces === 3 && packUi.scutum.off && /No room/.test(packUi.scutum.says) && /Merges into tier II/.test(packUi.vest)
         && /Sell Ship's Cannon I for \$9/.test(packUi.sellText) && sold.refund === 9 && sold.cannonGone && sold.scutumNow, JSON.stringify({ packUi, sold }));

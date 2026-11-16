@@ -137,15 +137,41 @@ class Play extends Phaser.Scene {
     return pack(all, BACKPACK.w, this.packRows);
   }
 
-  // What buying `u` would do: 'merge' (into the next tier), 'fit' (a new piece), 'swap' (another active item), or why
-  // it can't: 'max', 'room', 'companions'. (Money is checked separately.)
+  // What buying `u` would do: 'merge' (into the next tier), 'fit' (into a free spot), 'repack' (fits only if the
+  // backpack is rearranged), 'swap' (another active item), or why it can't: 'max', 'room', 'companions'. (Money is
+  // checked separately.)
   buyKind(u) {
     const have = this.owned[u.id] || 0;
     if (have >= u.max) return 'max';
     if (have) return 'merge';
     if (u.active) return this.P.active ? 'swap' : 'fit';
     if (u.companion && this.bought.filter(id => UPGRADE[id].companion).length >= MAX_COMPANIONS) return 'companions';
-    return this.packWith(u) ? 'fit' : 'room';
+    if (pack([{ id: u.id, cells: cellsOf(SHAPES[u.shape]) }], BACKPACK.w, this.packRows, Object.values(this.pack).flat())) return 'fit';
+    return this.packWith(u) ? 'repack' : 'room';
+  }
+
+  // Arranging the backpack by hand (in the shop). Can piece `id` sit on these cells: inside the backpack, not on
+  // another piece?
+  canPlace(id, cells) {
+    const taken = new Set(Object.entries(this.pack).filter(([other]) => other !== id).flatMap(([, c]) => c.map(String)));
+    return cells.every(([x, y]) => x >= 0 && y >= 0 && x < BACKPACK.w && y < this.packRows && !taken.has(`${x},${y}`));
+  }
+  movePiece(id, cells) {
+    if (!this.pack[id] || !this.canPlace(id, cells)) return false;
+    this.pack[id] = cells;
+    return true;
+  }
+  // A quarter turn (clockwise), as close to where the piece was as there's room for. False if it can't turn anywhere.
+  turnPiece(id) {
+    const cells = this.pack[id];
+    if (!cells) return false;
+    const x0 = Math.min(...cells.map(c => c[0])), y0 = Math.min(...cells.map(c => c[1]));
+    const turned = cells.map(([x, y]) => [-(y - y0), x - x0]), tx = Math.min(...turned.map(c => c[0]));
+    const shape = turned.map(([x, y]) => [x - tx, y]), spots = [];
+    for (let y = 0; y < this.packRows; y++) for (let x = 0; x < BACKPACK.w; x++) spots.push([x, y]);
+    spots.sort((a, b) => Math.hypot(a[0] - x0, a[1] - y0) - Math.hypot(b[0] - x0, b[1] - y0));
+    for (const [x, y] of spots) if (this.movePiece(id, shape.map(([cx, cy]) => [x + cx, y + cy]))) return true;
+    return false;
   }
 
   // Called by the shop: merges an item you have into its next tier, or fits it into the backpack. A new active item
@@ -153,9 +179,9 @@ class Play extends Phaser.Scene {
   // couldn't be bought.
   buy(u) {
     const kind = this.buyKind(u), cost = priceOf(u, this.owned), old = kind === 'swap' ? this.P.active.id : null;
-    if (!['merge', 'fit', 'swap'].includes(kind) || this.coins + this.refundFor(old) < cost) return null;
+    if (!['merge', 'fit', 'repack', 'swap'].includes(kind) || this.coins + this.refundFor(old) < cost) return null;
     if (old) this.sell(old);
-    if (!u.active && kind === 'fit') this.pack = this.packWith(u);
+    if (!u.active && (kind === 'fit' || kind === 'repack')) this.pack = this.packWith(u);
     if (kind !== 'merge') {
       this.bought.push(u.id);
       this.charge = u.active ? 0 : this.charge; // a new active item starts uncharged
